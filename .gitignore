@@ -1,0 +1,6 @@
+.venv/
+.mypy_cache/
+
+# uv 
+uv.lock
+.python-version
