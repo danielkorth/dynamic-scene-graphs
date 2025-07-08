@@ -1,4 +1,4 @@
-from src.utils import *
+from utils.open3d_utils import *
 import os
 import matplotlib
 matplotlib.use('TkAgg')  # Use Tkinter, Qt5, WebAgg, etc.
