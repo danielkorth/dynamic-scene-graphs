@@ -2,12 +2,30 @@
 
 ## Setup
 
+
 ```bash
 conda create -n dsg python=3.11
 conda activate dsg
 pip install uv 
-uv init
-uv pip install 
+uv pip sync
+```
+
+## Data Structure
+
+The project expects the following folder structure for data:
+
+```bash
+sh scripts/download_redwood.sh
+```
+
+which creates the following structure:
+```
+data/
+  living_room_1/
+    color/
+    depth/
+    livingroom.ply
+    livingroom1-traj.txt
 ```
 
 ## Run
