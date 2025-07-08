@@ -1,7 +1,7 @@
 import numpy as np
 import open3d as o3d
 import copy
-import open3d as o3d
+from scipy.spatial.transform import Rotation
 
 def create_o3d_from_numpy(np_points, np_colors):
     res = o3d.geometry.PointCloud()
@@ -76,7 +76,6 @@ def merge_pointclouds(pc_list, voxel_th=None):
     return merged_pc
 
 
-
 def read_pointclouds(source_idx, target_idx, depth_base_path="lab1/data/livingroom1-depth-clean"):
     color_raw = o3d.io.read_image('lab1/data/livingroom1-color/%(number)05d.jpg'%{"number": source_idx})
     depth_raw = o3d.io.read_image(depth_base_path + '/%(number)05d.png'%{"number": source_idx})
@@ -130,14 +129,27 @@ class CameraPose:
     def __init__(self, meta, mat):
         self.metadata = meta
         self.pose = mat
+
     def __str__(self):
         return 'Metadata : ' + ' '.join(map(str, self.metadata)) + '\n' + \
             "Pose : " + "\n" + np.array_str(self.pose)
+    
+    @property
+    def rotation(self):
+        return self.pose[:3, :3]
+    
+    @property
+    def rotation_axis_angle(self):
+        return Rotation.from_matrix(self.pose[:3, :3]).as_rotvec()
+    
+    @property
+    def translation(self):
+        return self.pose[:3, 3]
 
 def read_trajectory(filename):
     traj = []
     with open(filename, 'r') as f:
-        metastr = f.readline();
+        metastr = f.readline()
         while metastr:
             metadata = map(int, metastr.split())
             mat = np.zeros(shape = (4, 4))

@@ -1,5 +1,3 @@
-import numpy as np
-import rerun as rr
 import rerun.blueprint as rrb
 
 def setup_blueprint():
