@@ -7,7 +7,16 @@
 conda create -n dsg python=3.11
 conda activate dsg
 pip install uv 
-uv pip sync
+uv pip sync pyproject.toml
+# Install your package in editable mode
+uv pip install -e .
+```
+
+After this, you can import your package modules from anywhere in your environment, for example:
+
+```python
+from rerun import ...
+from utils import ...
 ```
 
 ## Data Structure

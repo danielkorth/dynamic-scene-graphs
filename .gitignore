@@ -3,6 +3,9 @@
 data
 .vscode
 */__pycache__/
+__pycache__/
+*.egg-info/
 
 # uv 
+uv.lock
 .python-version
