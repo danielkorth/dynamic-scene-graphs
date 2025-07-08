@@ -1,6 +1,8 @@
 .venv/
 .mypy_cache/
-data/*
+data
+.vscode
+*/__pycache__/
 
 # uv 
 .python-version
