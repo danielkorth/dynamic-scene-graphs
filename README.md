@@ -19,6 +19,15 @@ from rerun_viz import ...
 from utils import ...
 ```
 
+## Submodules
+
+```bash
+git submodule update --init --recursive
+
+cd external/sam2
+pip install -e .
+```
+
 ## Data Structure
 
 The project expects the following folder structure for data:
