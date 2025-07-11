@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 # Configuration
-SOURCE_FRAMES = './data/living_room_1/livingroom1-color_small'  # Path to frames directory
+SOURCE_FRAMES = './data/living_room_1/livingroom1-color_sampled'  # Path to frames directory
 OUTPUT_DIR = './data/sam2_res'  # Where to save results
 MAX_FRAMES = 300  # Maximum frames to process
 MODEL_TYPE = 'vit_b'  # SAM model type
@@ -60,6 +60,7 @@ def main():
         if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG"]
     ]
     frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
+    frame_nums = [int(f.split(".")[0]) for f in frame_names]
 
     # take a look the first video frame
     frame_idx = 0
@@ -135,9 +136,8 @@ def main():
         }
 
     # render the segmentation results every few frames
-    vis_frame_stride = 1
     plt.close("all")
-    for out_frame_idx in range(0, len(frame_names), vis_frame_stride):
+    for out_frame_idx in range(0, len(frame_names)):
         frame_path = os.path.join(SOURCE_FRAMES, frame_names[out_frame_idx])
         frame_img = Image.open(frame_path)
 
@@ -147,7 +147,7 @@ def main():
 
         for out_obj_id, out_mask in video_segments[out_frame_idx].items():
             # --- Save mask as .npy ---
-            mask_filename = f"frame{out_frame_idx:04d}_obj{out_obj_id}.npy"
+            mask_filename = f"frame{frame_nums[out_frame_idx]:04d}_obj{out_obj_id}.npy"
             mask_path = os.path.join(OUTPUT_DIR, "masks", mask_filename)
             np.save(mask_path, out_mask)
 
@@ -155,7 +155,7 @@ def main():
             show_mask(out_mask, ax, obj_id=out_obj_id)
 
         # --- Save visualization as .png ---
-        vis_filename = f"frame{out_frame_idx:04d}.png"
+        vis_filename = f"frame{frame_nums[out_frame_idx]:04d}.png"
         vis_path = os.path.join(OUTPUT_DIR, "visualizations", vis_filename)
         plt.savefig(vis_path, bbox_inches='tight')
         plt.close()

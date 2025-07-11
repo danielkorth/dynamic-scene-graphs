@@ -32,6 +32,7 @@ if __name__ == '__main__':
     separation = 1
     visual = False
     examples = 30
+    separation = 10
     ##########################################################################################################
 
     all_tans_errors = []
@@ -41,7 +42,7 @@ if __name__ == '__main__':
     examples = len(traj) if examples==-1 else examples
     
     pointclouds = []
-    for i in tqdm(range(examples)): #range(len(rgdfiles)):
+    for i in tqdm(range(0, examples*separation, separation)): #range(len(rgdfiles)):
         # print(rgdfiles[i])
         pointcloud = pc_from_rgbd(os.path.join(path_rgb, rgdfiles[i]), 
                                   os.path.join(path_depth, depthfiles[i]),
