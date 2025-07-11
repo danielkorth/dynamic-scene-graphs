@@ -3,7 +3,7 @@ import glob
 import numpy as np
 import open3d as o3d
 from tqdm import tqdm
-from utils.open3d_utils import read_trajectory
+from utils.open3d_utils import read_trajectory, pc_from_rgbd_with_mask
 
 # --------------------------------------------
 # Utility: generate a consistent color per object ID
@@ -16,45 +16,6 @@ def get_color_for_id(obj_id):
     import colorsys
     r, g, b = colorsys.hsv_to_rgb(hue, 0.75, 0.90)
     return [r, g, b]
-
-# --------------------------------------------
-# Backproject only masked pixels, assign uniform color
-# --------------------------------------------
-def pc_from_rgbd_with_mask(color_path, depth_path, mask, pose,
-                           intrinsic=o3d.camera.PinholeCameraIntrinsic(
-                               o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault),
-                           depth_scale=1000.0,
-                           depth_trunc=3.0):
-    # Load images
-    color = np.asarray(o3d.io.read_image(color_path))
-    depth = np.asarray(o3d.io.read_image(depth_path)).astype(np.float64) / depth_scale
-
-    # Mask & valid depth
-    valid = mask & (depth > 0) & (depth < depth_trunc)
-    coords = np.argwhere(valid)
-    if coords.size == 0:
-        return o3d.geometry.PointCloud()
-    vs, us = coords[:, 0], coords[:, 1]
-    zs = depth[vs, us]
-
-    fx = intrinsic.intrinsic_matrix[0, 0]
-    fy = intrinsic.intrinsic_matrix[1, 1]
-    cx = intrinsic.intrinsic_matrix[0, 2]
-    cy = intrinsic.intrinsic_matrix[1, 2]
-
-    xs = (us - cx) * zs / fx
-    ys = (vs - cy) * zs / fy
-    pts = np.stack([xs, ys, zs], axis=1)
-
-    # Transform to world
-    R = pose[:3, :3]
-    t = pose[:3, 3]
-    pts_world = (R @ pts.T).T + t
-
-    # Build point cloud
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pts_world)
-    return pcd
 
 # --------------------------------------------
 # Main
