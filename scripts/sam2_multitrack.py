@@ -7,7 +7,8 @@ import matplotlib
 matplotlib.use('TkAgg')  # Use Tkinter, Qt5, WebAgg, etc.
 import matplotlib.pyplot as plt
 from PIL import Image
-from utils.sam2_utils import mask_first_frame, save_sam, propagate_video
+from utils.sam2_utils import (mask_first_frame_interactive, save_sam, 
+                              propagate_video, mask_first_frame)
 
 # Configuration
 SOURCE_FRAMES = './data/living_room_1/livingroom1-color_sampled'  # Path to frames directory
@@ -43,44 +44,13 @@ def main():
     frame_idx = 0
     frame_path = os.path.join(SOURCE_FRAMES, frame_names[frame_idx])
     ann_frame_idx = frame_idx
-    img = Image.open(frame_path)
-
-    # === Click collection setup ===
-    clicked_points = []
-    labels = []  # 1 = positive, 0 = negative (optional, defaults to 1)
-
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.set_title(f"Click to add points on frame {frame_idx}. Press 'Enter' or 'q' to finish.")
-    ax.imshow(img)
-
-    def onclick(event):
-        if event.inaxes:
-            x, y = event.xdata, event.ydata
-            clicked_points.append((x, y))
-            labels.append(1)  # always positive in this example
-            ax.plot(x, y, 'go')  # plot green dot
-            fig.canvas.draw()
-
-    def onkey(event):
-        if event.key == 'enter' or event.key == 'q':
-            plt.close()
-
-    cid_click = fig.canvas.mpl_connect('button_press_event', onclick)
-    cid_key = fig.canvas.mpl_connect('key_press_event', onkey)
-
-    plt.show()
-
-    # === Validate input ===
-    if not clicked_points:
-        raise ValueError("No points were clicked!")
-
-    all_points = np.array(clicked_points, dtype=np.float32)
     
-    predictor, inference_state = mask_first_frame(predictor, all_points, frame_idx=ann_frame_idx, video_path=SOURCE_FRAMES)
+    # predictor, inference_state = mask_first_frame_interactive(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
+    predictor, inference_state = mask_first_frame(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
 
     # Show the results
     # run propagation throughout the video and collect the results in a dict
-    predictor, video_segments = propagate_video(predictor, inference_state)
+    predictor, video_segments = propagate_video(predictor, inference_state, video_path=SOURCE_FRAMES)
 
     # render the segmentation results every few frames
     plt.close("all")
