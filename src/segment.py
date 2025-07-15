@@ -1,23 +1,24 @@
 import numpy as np
-from typing import List
+from typing import List, Tuple
 import matplotlib.pyplot as plt
 
 from sam2.build_sam import build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
-def show_anns(anns, ax=None, borders=True):
-    if len(anns) == 0:
+def show_anns(mask_color_pairs, ax=None, borders=True):
+    if len(mask_color_pairs) == 0:
         return
     if ax is None:
         ax = plt.gca()
     ax.set_autoscale_on(False)
 
-    img = np.ones((anns[0]['segmentation'].shape[0], anns[0]['segmentation'].shape[1], 4))
+    img = np.ones((mask_color_pairs[0][0]['segmentation'].shape[0], mask_color_pairs[0][0]['segmentation'].shape[1], 4))
     img[:, :, 3] = 0
-    sorted_anns = sorted(anns, key=(lambda x: x['area']), reverse=True)
-    for ann in sorted_anns:
+    # Sort by area, but keep color pairing
+    sorted_pairs = sorted(mask_color_pairs, key=lambda pair: float(pair[0]['area']), reverse=True)
+    for ann, color in sorted_pairs:
         m = ann['segmentation']
-        color_mask = np.concatenate([np.random.random(3), [0.5]])
+        color_mask = np.concatenate([color, [0.5]])
         img[m] = color_mask 
         if borders:
             import cv2
@@ -70,14 +71,53 @@ class SAM2Segmenter:
         masks = self.mask_generator.generate(image)
         return masks
 
-    def visualize_masks(self, image: np.ndarray, masks: List[np.ndarray], only_masks: bool = False) -> None:
+    def visualize_masks(self, image: np.ndarray, masks: List[dict], only_masks: bool = False, show_bbox: bool = False, show_points: bool = False, show_stability: bool = False) -> None:
+        """
+        Visualize masks on the image with optional overlays.
+        Args:
+            image: The input image (HWC, np.ndarray)
+            masks: List of mask dicts (as output by segment())
+            only_masks: If True, show only the masks, not the image
+            show_bbox: If True, draw bounding boxes for each mask
+            show_points: If True, draw point coordinates for each mask
+            show_stability: If True, write the stability score for each mask
+        """
+        import matplotlib.patches as mpatches
         plt.figure(figsize=(20, 20))
+        ax = plt.gca()
         if not only_masks:
-            plt.imshow(image)
+            ax.imshow(image)
         else:
-            plt.imshow(np.zeros_like(image))
-        show_anns(masks)
-        plt.axis('off')
+            ax.imshow(np.zeros_like(image))
+        n = len(masks)
+        rng = np.random.default_rng(42)  # fixed seed for reproducibility
+        colors = rng.random((n, 3))
+        mask_color_pairs = [(masks[i], colors[i]) for i in range(n)]
+        show_anns(mask_color_pairs, ax=ax)
+        # For overlays, sort the pairs by area (same as show_anns)
+        sorted_pairs = sorted(mask_color_pairs, key=lambda pair: float(pair[0]['area']), reverse=True)
+        for ann, color in sorted_pairs:
+            # Draw bbox
+            if show_bbox and 'bbox' in ann:
+                x, y, w, h = ann['bbox']
+                rect = mpatches.Rectangle((x, y), w, h, linewidth=2, edgecolor=color, facecolor='none', alpha=0.9)
+                ax.add_patch(rect)
+            # Draw points
+            if show_points and 'point_coords' in ann:
+                pts = np.array(ann['point_coords'])
+                ax.scatter(pts[:, 0], pts[:, 1], c=[color], s=80, marker='o', edgecolors='white', linewidths=2, zorder=10)
+            # Write stability score
+            if show_stability and 'stability_score' in ann:
+                # Place text near top-left of bbox if available, else near first point
+                if 'bbox' in ann:
+                    x, y, _, _ = ann['bbox']
+                    tx, ty = x, y - 5
+                elif 'point_coords' in ann:
+                    tx, ty = ann['point_coords'][0]
+                else:
+                    tx, ty = 0, 0
+                ax.text(tx, ty, f"Stab: {ann['stability_score']:.3f}", color='yellow', fontsize=12, weight='bold', bbox=dict(facecolor='black', alpha=0.5, edgecolor='none'), zorder=20)
+        ax.axis('off')
         plt.show()
     
     def get_masks_figure(self, image: np.ndarray, masks: List[np.ndarray], only_masks: bool = False):
