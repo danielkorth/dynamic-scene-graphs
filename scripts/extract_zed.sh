@@ -1,6 +1,6 @@
 #!/bin/bash
 
-FILE_NAME="new"
+FILE_NAME="short"
 INPUT_SVO_FILE="data/svo/$FILE_NAME.svo2"
 OUTPUT_PATH_DIR="data/zed/$FILE_NAME"
 

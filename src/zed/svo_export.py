@@ -67,7 +67,7 @@ def main(opt):
     init_params.set_from_svo_file(svo_input_path)
     init_params.svo_real_time_mode = False  # Don't convert in realtime
     init_params.coordinate_units = sl.UNIT.MILLIMETER  # Use milliliter units (for depth measurements)
-    init_params.depth_mode = sl.DEPTH_MODE.ULTRA
+    init_params.depth_mode = sl.DEPTH_MODE.NEURAL
     # init_params.depth_mode = sl.DEPTH_MODE.PERFORMANCE
 
     # Create ZED objects

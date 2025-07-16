@@ -70,7 +70,7 @@ def main(opt):
                                  coordinate_units=sl.UNIT.METER,
                                  coordinate_system=sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP)
     parse_args(init_params, opt)
-    init_params.depth_mode = sl.DEPTH_MODE.ULTRA
+    init_params.depth_mode = sl.DEPTH_MODE.NEURAL
 
     zed = sl.Camera()
     status = zed.open(init_params)
