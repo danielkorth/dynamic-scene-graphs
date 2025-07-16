@@ -8,12 +8,12 @@ import matplotlib
 matplotlib.use('TkAgg')  # Use Tkinter, Qt5, WebAgg, etc.
 import matplotlib.pyplot as plt
 from PIL import Image
-from utils.sam2_utils import (mask_first_frame_interactive, save_sam, 
+from utils.sam2_utils import (mask_first_frame_interactive, save_sam, mask_first_frame_multi,
                               propagate_video, mask_first_frame, propagate_video_multi)
 
 # Configuration
 # SOURCE_FRAMES = './data/zed_office_sampled'  # Path to frames directory
-SOURCE_FRAMES = './data/tmp'  # Path to frames directory
+SOURCE_FRAMES = './data/tmp_tiny'  # Path to frames directory
 OUTPUT_DIR = './data/sam2_res'  # Where to save results
 MAX_FRAMES = 300  # Maximum frames to process
 MODEL_TYPE = 'vit_b'  # SAM model type
@@ -28,12 +28,13 @@ os.makedirs(os.path.join(OUTPUT_DIR, "visualizations"), exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Load SAM model
-sam2_checkpoint = "external/sam2/checkpoints/sam2.1_hiera_large.pt"
+sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt"
 model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
 
 def main():
     # predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=DEVICE)
-    predictor = build_sam2_camera_predictor_multi(model_cfg, sam2_checkpoint, device=DEVICE)
+    predictor = build_sam2_camera_predictor(model_cfg, sam2_checkpoint, device=DEVICE)
+    # predictor = build_sam2_camera_predictor_multi(model_cfg, sam2_checkpoint, device=DEVICE)
 
     # scan all the JPEG frame names in this directory
     frame_names = [
@@ -49,11 +50,12 @@ def main():
     
     # predictor, inference_state = mask_first_frame_interactive(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
     predictor, inference_state = mask_first_frame(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
+    # predictor, inference_state = mask_first_frame_multi(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
 
     # Show the results
     # run propagation throughout the video and collect the results in a dict
     # predictor, video_segments = propagate_video(predictor, inference_state, video_path=SOURCE_FRAMES)
-    predictor, video_segments = propagate_video_multi(predictor, inference_state, video_path=SOURCE_FRAMES)
+    predictor, video_segments = propagate_video(predictor, inference_state, video_path=SOURCE_FRAMES)
 
     # render the segmentation results every few frames
     plt.close("all")

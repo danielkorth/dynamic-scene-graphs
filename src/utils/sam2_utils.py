@@ -105,7 +105,7 @@ def mask_first_frame_interactive(predictor, video_path, frame_idx = 0, viz=False
 
     return predictor, inference_state
 
-def mask_first_frame(predictor,
+def mask_first_frame_multi(predictor,
                     video_path: str,
                     frame_idx: int = 0,
                     viz = False
@@ -136,7 +136,7 @@ def mask_first_frame(predictor,
     # 1) Automatic mask generation
     # predictor.generate_auto_masks should return masks as [N, H, W] boolean or logits
     segmenter = SAM2Segmenter(
-        sam2_checkpoint = "external/sam2/checkpoints/sam2.1_hiera_large.pt",
+        sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt",
         model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
     )
     masks = segmenter.segment(img_np)
@@ -169,6 +169,77 @@ def mask_first_frame(predictor,
         # Add to predictor state
         _, out_obj_ids, out_mask_logits = predictor.add_new_points(
             cond_state_idx=len(predictor.condition_states)-1,
+            frame_idx=frame_idx,
+            obj_id=obj_id,
+            points=points,
+            labels=labels,
+        )
+
+    return predictor, None
+
+def mask_first_frame(predictor,
+                    video_path: str,
+                    frame_idx: int = 0,
+                    viz = False
+                    ) :
+    """
+    Automatically generate masks on the first frame and initialize tracking.
+
+    Args:
+        predictor: SAM2 predictor with auto-mask capability.
+        video_path: Path to folder of frames named "%05d.jpg".
+        frame_idx: Index of the frame to mask.
+        iou_threshold: Minimum IoU to merge overlapping masks.
+        point_sampling_method: How to sample a point from each mask ("centroid" or "random").
+    Returns:
+        predictor: Reset predictor ready for tracking.
+        inference_state: Initialized inference state with object prompts added.
+    """
+    # Load image
+    image_files = sorted([
+        f for f in os.listdir(video_path)
+        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+    ])
+    img_path = os.path.join(video_path, image_files[frame_idx])
+    img_pil = Image.open(img_path).convert("RGB")
+    img_np = np.array(img_pil)
+    coverage_threshold = 0.0
+
+    # 1) Automatic mask generation
+    # predictor.generate_auto_masks should return masks as [N, H, W] boolean or logits
+    segmenter = SAM2Segmenter(
+        sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt",
+        model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
+    )
+    masks = segmenter.segment(img_np)
+
+    union, coverage = mask_union_and_coverage(masks)
+    if coverage < coverage_threshold:
+        masks = refine_masks_with_complement(segmenter.mask_generator.predictor, img_np, union, masks)
+    print(f"Image coverage was {coverage:.1%}; now have {len(masks)} masks.")
+
+    if viz:
+        # 1.5) Visualization
+        fig, ax = plt.subplots()
+        ax.imshow(img_np)
+        for i, mask in enumerate(masks):
+            show_mask(mask['segmentation'], ax, obj_id=i, random_color=True)
+        ax.axis('off')
+        ax.set_title(f"Masks overlaid on frame {frame_idx}")
+        plt.tight_layout()
+        plt.show()
+
+    # 2) Initialize inference state
+    predictor.load_first_frame(img_np)
+
+    # 3) For each mask, compute a representative point and feed as prompt
+    for obj_id, mask in enumerate(masks):
+
+        points = mask['point_coords']
+        labels = np.ones(len(points), dtype=np.int32)
+
+        # Add to predictor state
+        _, out_obj_ids, out_mask_logits = predictor.add_new_points(
             frame_idx=frame_idx,
             obj_id=obj_id,
             points=points,
@@ -325,14 +396,14 @@ def refine_masks_with_complement(
     # append kept new masks
     out.extend(final_new)
 
-    visualize_refinement(
-        img=img,
-        union=union,
-        masks=masks,
-        comp_mask=comp_mask,
-        sampled_points=p_coords.squeeze(),
-        out_masks=out
-    )
+    # visualize_refinement(
+    #     img=img,
+    #     union=union,
+    #     masks=masks,
+    #     comp_mask=comp_mask,
+    #     sampled_points=p_coords.squeeze(),
+    #     out_masks=out
+    # )
 
     return out
 
@@ -340,7 +411,7 @@ def refine_masks_with_complement(
 #     video_segments = {}  # video_segments contains the per-frame segmentation results
 #     coverage_threshold = 0.6
 #     single_frame_seg = SAM2Segmenter(
-#         sam2_checkpoint = "external/sam2/checkpoints/sam2.1_hiera_large.pt",
+#         sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt",
 #         model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
 #     )
 #     img_names = os.listdir(video_path)
@@ -381,7 +452,7 @@ def propagate_video(predictor, inference_state, video_path, viz = False):
     predictors = [predictor]
     coverage_threshold = 0.6
     single_frame_seg = SAM2Segmenter(
-        sam2_checkpoint = "external/sam2/checkpoints/sam2.1_hiera_tiny.pt",
+        sam2_checkpoint = "checkpoints/sam2.1_hiera_tiny.pt",
         model_cfg = "./configs/sam2.1/sam2.1_hiera_t.yaml" 
     )
     img_names = os.listdir(video_path)
@@ -417,7 +488,7 @@ def propagate_video(predictor, inference_state, video_path, viz = False):
             plt.tight_layout()
             plt.show()
 
-        sam2_checkpoint = "external/sam2/checkpoints/sam2.1_hiera_tiny.pt"
+        sam2_checkpoint = "checkpoints/sam2.1_hiera_tiny.pt"
         model_cfg = "./configs/sam2.1/sam2.1_hiera_t.yaml"
         new_p = build_sam2_camera_predictor(model_cfg, sam2_checkpoint, device=predictors[0].device)
         new_p.load_first_frame(img_np)
@@ -430,14 +501,13 @@ def propagate_video(predictor, inference_state, video_path, viz = False):
 
             # Add to predictor state
             _, out_obj_ids, out_mask_logits = new_p.add_new_points(
-                cond_state_idx=frame_idx+1,
                 frame_idx=0,
                 obj_id=new_idx,
                 points=points,
                 labels=labels,
             ) 
 
-            # predictors.append(new_p)     
+            predictors.append(new_p)     
             
     return predictor, video_segments
 
@@ -446,7 +516,7 @@ def propagate_video_multi(predictor, inference_state, video_path, viz = False):
     predictors = [predictor]
     coverage_threshold = 0.6
     single_frame_seg = SAM2Segmenter(
-        sam2_checkpoint = "external/sam2/checkpoints/sam2.1_hiera_tiny.pt",
+        sam2_checkpoint = "checkpoints/sam2.1_hiera_tiny.pt",
         model_cfg = "./configs/sam2.1/sam2.1_hiera_t.yaml" 
     )
     img_names = os.listdir(video_path)
@@ -482,7 +552,7 @@ def propagate_video_multi(predictor, inference_state, video_path, viz = False):
             plt.tight_layout()
             plt.show()
 
-        # sam2_checkpoint = "external/sam2/checkpoints/sam2.1_hiera_tiny.pt"
+        # sam2_checkpoint = "checkpoints/sam2.1_hiera_tiny.pt"
         # model_cfg = "./configs/sam2.1/sam2.1_hiera_t.yaml"
         # new_p = build_sam2_camera_predictor(model_cfg, sam2_checkpoint, device=predictors[0].device)
         # new_p.load_first_frame(img_np)
