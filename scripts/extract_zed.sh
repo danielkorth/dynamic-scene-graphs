@@ -14,3 +14,6 @@ python src/zed/merge_images_to_video_unified.py $OUTPUT_PATH_DIR/images -o $OUTP
 
 # # Tracking: 
 python src/zed/positional_tracking.py --input_svo_file $INPUT_SVO_FILE --output_file $OUTPUT_PATH_DIR/poses.txt
+
+scp -r $OUTPUT_PATH_DIR xanadon@129.132.245.33:/local/home/xanadon/dynamic-scene-graphs/data/zed
+# scp -r $OUTPUT_PATH_DIR dkorth@129.132.245.22:/local/home/dkorth/Projects/dynamic-scene-graphs/data/zed
