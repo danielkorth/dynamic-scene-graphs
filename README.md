@@ -22,9 +22,7 @@ from utils import ...
 ## Submodules
 
 ```bash
-git submodule update --init --recursive
-
-cd external/sam2
+cd sam2
 pip install -e .
 ```
 
