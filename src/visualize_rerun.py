@@ -1,7 +1,7 @@
 from pathlib import Path
 import argparse
 import rerun as rr
-from utils.zed import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, get_camera_matrix, get_distortion_coeffs
+from utils.data_loading import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, get_camera_matrix, get_distortion_coeffs
 from utils.rerun import setup_blueprint
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -10,13 +10,15 @@ from utils.cv2_utils import unproject_image
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Visualize ZED camera data in Rerun")
-    parser.add_argument("--max-frames", "-n", type=int, default=None, 
+    parser.add_argument("--max-frames", "-n", type=int, default=50, 
                        help="Maximum number of frames to load (default: all frames)")
     parser.add_argument("--subsample", "-s", type=int, default=None,
                        help="Subsample every Nth frame (default: no subsampling)")
     parser.add_argument("--data-dir", "-d", type=str, 
                        default="/local/home/dkorth/Projects/dynamic-scene-graphs/data/recent",
                        help="Path to data directory (default: data/recent)")
+    parser.add_argument("--use_depth", type=bool, default=False,
+                       help="Use depth images (default: True)")
     args = parser.parse_args()
 
     # set up rerun env
@@ -47,10 +49,12 @@ def main():
 
     for i, (rgb, depth, tvec, rvec) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs)):
         rr.log("world/camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
-        # rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000, depth_range=[0, 3000]))
 
-        points_3d, _ = unproject_image(depth, K, dist, rvec, tvec)
-        rr.log("world/points", rr.Points3D(points_3d, colors=[255, 0, 0]))
+        if args.use_depth:
+            points_3d, _ = unproject_image(depth, K, dist, rvec, tvec)
+            rr.log("world/points", rr.Points3D(points_3d, colors=[255, 0, 0]))
+        else:
+            rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000, depth_range=[0, 3000]))
 
         rr.log("world/camera", rr.Transform3D(
             rotation=rr.RotationAxisAngle(axis=rvec, angle=-float(np.linalg.norm(rvec))),

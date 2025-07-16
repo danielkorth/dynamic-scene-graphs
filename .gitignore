@@ -6,6 +6,11 @@ data
 __pycache__/
 *.egg-info/
 checkpoints/*
+*.pt
+*.pth
+sam2
+# util script
+sync_zed_data.sh
 
 # uv 
 uv.lock
