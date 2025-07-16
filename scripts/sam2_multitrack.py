@@ -2,16 +2,18 @@ import os
 import cv2
 import numpy as np
 import torch
-from sam2.build_sam import build_sam2_video_predictor
+from sam2.build_sam import (build_sam2_video_predictor, build_sam2_camera_predictor,
+                            build_sam2_camera_predictor_multi)
 import matplotlib
 matplotlib.use('TkAgg')  # Use Tkinter, Qt5, WebAgg, etc.
 import matplotlib.pyplot as plt
 from PIL import Image
 from utils.sam2_utils import (mask_first_frame_interactive, save_sam, 
-                              propagate_video, mask_first_frame)
+                              propagate_video, mask_first_frame, propagate_video_multi)
 
 # Configuration
-SOURCE_FRAMES = './data/living_room_1/livingroom1-color_sampled'  # Path to frames directory
+# SOURCE_FRAMES = './data/zed_office_sampled'  # Path to frames directory
+SOURCE_FRAMES = './data/tmp'  # Path to frames directory
 OUTPUT_DIR = './data/sam2_res'  # Where to save results
 MAX_FRAMES = 300  # Maximum frames to process
 MODEL_TYPE = 'vit_b'  # SAM model type
@@ -30,7 +32,8 @@ sam2_checkpoint = "external/sam2/checkpoints/sam2.1_hiera_large.pt"
 model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
 
 def main():
-    predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=DEVICE)
+    # predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=DEVICE)
+    predictor = build_sam2_camera_predictor_multi(model_cfg, sam2_checkpoint, device=DEVICE)
 
     # scan all the JPEG frame names in this directory
     frame_names = [
@@ -42,7 +45,6 @@ def main():
 
     # take a look the first video frame
     frame_idx = 0
-    frame_path = os.path.join(SOURCE_FRAMES, frame_names[frame_idx])
     ann_frame_idx = frame_idx
     
     # predictor, inference_state = mask_first_frame_interactive(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
@@ -50,7 +52,8 @@ def main():
 
     # Show the results
     # run propagation throughout the video and collect the results in a dict
-    predictor, video_segments = propagate_video(predictor, inference_state, video_path=SOURCE_FRAMES)
+    # predictor, video_segments = propagate_video(predictor, inference_state, video_path=SOURCE_FRAMES)
+    predictor, video_segments = propagate_video_multi(predictor, inference_state, video_path=SOURCE_FRAMES)
 
     # render the segmentation results every few frames
     plt.close("all")
