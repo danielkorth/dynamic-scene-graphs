@@ -4,6 +4,56 @@ import copy
 from scipy.spatial.transform import Rotation
 import cv2
 
+from utils.tools import center_crop
+
+def create_camera_mesh(scale=0.1, color = [0.9, 0.1, 0.1]):
+    """
+    Create a rectangular-based camera mesh (frustum) to represent the camera's pose.
+    The base is a rectangle, with horizontal sides longer than vertical sides.
+
+    Parameters
+    ----------
+    scale : float, default=0.1
+        The size of the camera frustum.
+
+    Returns
+    -------
+    o3d.geometry.LineSet
+        A wireframe mesh representing the camera frustum.
+    """
+    import numpy as np
+    import open3d as o3d
+
+    # Define the aspect ratio of the base: width > height
+    width = 2.0   # horizontal (x direction)
+    height = 1.0  # vertical (y direction)
+    depth = 2.0   # distance from camera center to base
+
+    # Vertices: [camera center, top-right, top-left, bottom-left, bottom-right]
+    vertices = np.array([
+        [0, 0, 0],  # Camera center
+        [ width/2,  height/2, depth],  # Top-right
+        [-width/2,  height/2, depth],  # Top-left
+        [-width/2, -height/2, depth],  # Bottom-left
+        [ width/2, -height/2, depth],  # Bottom-right
+    ]) * scale
+
+    # Define the edges (lines) between vertices
+    lines = [
+        [0, 1], [0, 2], [0, 3], [0, 4],  # Lines from camera center to base corners
+        [1, 2], [2, 3], [3, 4], [4, 1]   # Rectangle base edges
+    ]
+
+    # Create a LineSet for the camera
+    line_set = o3d.geometry.LineSet()
+    line_set.points = o3d.utility.Vector3dVector(vertices)
+    line_set.lines = o3d.utility.Vector2iVector(lines)
+
+    # Set the color of the lines
+    colors = [color for _ in lines]
+    line_set.colors = o3d.utility.Vector3dVector(colors)
+
+    return line_set
 
 def vectors_to_mat(rot, trans):
     # Convert rotation vector to rotation matrix
@@ -15,6 +65,28 @@ def vectors_to_mat(rot, trans):
     T[:3, 3] = trans
 
     return T
+
+def mat_to_vectors(T):
+    """
+    Inverse of vectors_to_mat: extracts rotation vector and translation vector
+    from a 4x4 transformation matrix.
+    
+    Parameters:
+        T (np.ndarray): 4x4 transformation matrix
+
+    Returns:
+        rot (np.ndarray): Rotation vector (3,)
+        trans (np.ndarray): Translation vector (3,)
+    """
+    # Extract rotation matrix and translation vector
+    R_mat = T[:3, :3]
+    trans = T[:3, 3]
+
+    # Convert rotation matrix to rotation vector
+    rot = Rotation.from_matrix(R_mat).as_rotvec()
+
+    return rot, trans
+
 
 def create_o3d_from_numpy(np_points, np_colors):
     res = o3d.geometry.PointCloud()
@@ -31,15 +103,24 @@ def create_o3d_from_numpy(np_points, np_colors):
         
     return res
 
-def pc_from_rgbd(path_rgb, path_depth, pose, intrinsics=o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault):
+def pc_from_rgbd(path_rgb, path_depth, pose, intrinsics=None, crop=None):
+    if intrinsics is None:
+        intrinsics = o3d.camera.PinholeCameraIntrinsic(
+            o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+
     # Load images
     color_bgr = cv2.imread(path_rgb)
     color_rgb = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2RGB)
-    color_raw = o3d.geometry.Image(color_rgb)
-    depth_raw = o3d.io.read_image(path_depth)
 
     # Convert depth to numpy array for processing
+    depth_raw = o3d.io.read_image(path_depth)
     depth_np = np.asarray(depth_raw)
+
+    if crop is not None:
+        depth_np = center_crop(depth_np, crop)
+        color_rgb = center_crop(color_rgb, crop)
+
+    color_raw = o3d.geometry.Image(np.ascontiguousarray(color_rgb))    
 
     # Normalize and convert to 8-bit image for edge detection
     depth_uint8 = cv2.normalize(depth_np, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
@@ -47,15 +128,26 @@ def pc_from_rgbd(path_rgb, path_depth, pose, intrinsics=o3d.camera.PinholeCamera
     # Detect edges using Canny
     edges = cv2.Canny(depth_uint8, 50, 150)
 
-    # Inflate edges using dilation
+    # Inflate edges using stronger dilation
     kernel = np.ones((5, 5), np.uint8)
-    edges_dilated = cv2.dilate(edges, kernel, iterations=1)
+    edges_dilated = cv2.dilate(edges, kernel, iterations=2)
+
+
+    # # --- Visualization of detected edges (for debugging) ---
+    # # Uncomment the following lines to visualize edges side by side and scaled down
+    # edges_combined = np.hstack((edges, edges_dilated))
+    # scale_factor = 0.5  # Adjust as needed (e.g., 0.5 for half size)
+    # edges_combined_small = cv2.resize(edges_combined, (0, 0), fx=scale_factor, fy=scale_factor)
+    # cv2.imshow('Canny Edges (Left) | Canny Edges Dilated (Right)', edges_combined_small)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+    # # ------------------------------------------------------
 
     # Mask out noisy depth areas
     depth_np[edges_dilated > 0] = 0
 
     # Convert cleaned depth back to Open3D image
-    cleaned_depth = o3d.geometry.Image(depth_np)
+    cleaned_depth = o3d.geometry.Image(np.ascontiguousarray(depth_np))
 
     # Create RGBD image
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(
@@ -64,7 +156,7 @@ def pc_from_rgbd(path_rgb, path_depth, pose, intrinsics=o3d.camera.PinholeCamera
     # Create point cloud
     pointcloud = o3d.geometry.PointCloud.create_from_rgbd_image(
         rgbd_image,
-        o3d.camera.PinholeCameraIntrinsic(intrinsics)
+        intrinsics
     )
 
     pointcloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
