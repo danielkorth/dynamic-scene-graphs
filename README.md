@@ -7,8 +7,9 @@
 conda create -n dsg python=3.11
 conda activate dsg
 pip install uv 
-uv pip sync pyproject.toml
-# Install your package in editable mode
+uv pip install -r requirements.txt
+# installing sam2
+cd sam2
 uv pip install -e .
 ```
 
@@ -27,7 +28,6 @@ pip install -e .
 ```
 
 ## Data Structure
-
 The project expects the following folder structure for data:
 
 ```bash
@@ -43,5 +43,3 @@ data/
     livingroom.ply
     livingroom1-traj.txt
 ```
-
-## Run
