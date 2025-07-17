@@ -17,17 +17,24 @@ def main():
     parser.add_argument("--data-dir", "-d", type=str, 
                        default="/local/home/dkorth/Projects/dynamic-scene-graphs/data/recent",
                        help="Path to data directory (default: data/recent)")
-    parser.add_argument("--use_depth", type=bool, default=False,
-                       help="Use depth images (default: True)")
+    parser.add_argument("--headless", action="store_true",
+                       help="Run in headless mode (default: False)")
+    parser.add_argument("--use_depth", action="store_true",
+                       help="Use depth images (default: False)")
     args = parser.parse_args()
 
+    print(args)
     # set up rerun env
-    rr.init("living_room", spawn=False, default_blueprint=setup_blueprint())
-    rr.connect_grpc()
+    if args.headless:
+        # ensure that a rerun server is running (rerun --serve)
+        rr.init("living_room", spawn=False, default_blueprint=setup_blueprint())
+        rr.connect_grpc()
+    else:
+        rr.init("living_room", spawn=True, default_blueprint=setup_blueprint())
 
     rr.set_time(timeline="world", sequence=0)
 
-    intrinsics = load_camera_intrinsics("/local/home/dkorth/Projects/dynamic-scene-graphs/data/SN35693142.conf", camera="left", resolution="2K")
+    intrinsics = load_camera_intrinsics("./data/SN35693142.conf", camera="left", resolution="2K")
     K = get_camera_matrix(intrinsics)
     dist = get_distortion_coeffs(intrinsics)
 
