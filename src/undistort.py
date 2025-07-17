@@ -4,9 +4,14 @@ Script to undistort ZED camera RGB and depth images.
 
 Usage:
     python src/undistort.py <input_directory>
+    python src/undistort.py <input_directory> --crop
 
-Example:
+Examples:
     python src/undistort.py data/zed/new/images
+    python src/undistort.py data/zed/new/images --crop
+    
+The --crop option removes black regions created by undistortion, producing 
+clean rectangular images with only valid pixel data.
 """
 
 import argparse
@@ -34,6 +39,8 @@ def parse_arguments():
                        help='Camera to use (default: left)')
     parser.add_argument('--resolution', default='2K', choices=['2K', 'FHD', 'HD', 'VGA'],
                        help='Camera resolution (default: 2K)')
+    parser.add_argument('--crop', action='store_true',
+                       help='Crop undistorted images to remove black regions (creates rectangular images with only valid pixels)')
     
     return parser.parse_args()
 
@@ -68,9 +75,34 @@ def undistort_image(image, camera_matrix, dist_coeffs, output_size=None):
     return undistorted, new_camera_matrix, roi
 
 
-def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir):
+def crop_to_roi(image, roi):
+    """Crop image to ROI to remove black regions from undistortion.
+    
+    Args:
+        image: Undistorted image
+        roi: Region of Interest tuple (x, y, w, h) from getOptimalNewCameraMatrix
+        
+    Returns:
+        cropped_image: Image cropped to valid region only
+    """
+    x, y, w, h = roi
+    
+    # Handle case where ROI is invalid (all zeros)
+    if w <= 0 or h <= 0:
+        print("Warning: Invalid ROI detected, returning original image")
+        return image
+    
+    # Crop the image to the ROI
+    cropped = image[y:y+h, x:x+w]
+    return cropped
+
+
+def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir, crop=False):
     """Process and undistort all RGB and depth images."""
     os.makedirs(output_dir, exist_ok=True)
+    
+    # Variables to track ROI info for reporting
+    roi_info = None
     
     # Process RGB images
     print("Processing RGB images...")
@@ -83,9 +115,21 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
                 continue
             
             # Undistort RGB image
-            undistorted_rgb, _, _ = undistort_image(rgb_image, camera_matrix, dist_coeffs)
+            undistorted_rgb, _, roi = undistort_image(rgb_image, camera_matrix, dist_coeffs)
             
-            # Save undistorted RGB image
+            # Store ROI info for reporting (use first valid ROI)
+            if roi_info is None and roi[2] > 0 and roi[3] > 0:
+                roi_info = {
+                    'original_size': f"{rgb_image.shape[1]}x{rgb_image.shape[0]}",
+                    'roi': roi,
+                    'cropped_size': f"{roi[2]}x{roi[3]}"
+                }
+            
+            # Apply cropping if requested
+            if crop:
+                undistorted_rgb = crop_to_roi(undistorted_rgb, roi)
+            
+            # Save undistorted (and possibly cropped) RGB image
             filename = os.path.basename(rgb_file)
             output_path = os.path.join(output_dir, filename)
             cv2.imwrite(output_path, undistorted_rgb)
@@ -105,9 +149,13 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
                 continue
             
             # Undistort depth image
-            undistorted_depth, _, _ = undistort_image(depth_image, camera_matrix, dist_coeffs)
+            undistorted_depth, _, roi = undistort_image(depth_image, camera_matrix, dist_coeffs)
             
-            # Save undistorted depth image
+            # Apply cropping if requested
+            if crop:
+                undistorted_depth = crop_to_roi(undistorted_depth, roi)
+            
+            # Save undistorted (and possibly cropped) depth image
             filename = os.path.basename(depth_file)
             output_path = os.path.join(output_dir, filename)
             cv2.imwrite(output_path, undistorted_depth)
@@ -115,6 +163,14 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
         except Exception as e:
             print(f"Error processing {depth_file}: {e}")
             continue
+    
+    # Print ROI information if cropping was applied
+    if crop and roi_info:
+        print(f"\nCropping applied:")
+        print(f"  Original image size: {roi_info['original_size']}")
+        print(f"  ROI (x,y,w,h): {roi_info['roi']}")
+        print(f"  Cropped image size: {roi_info['cropped_size']}")
+        print(f"  Removed black regions from undistortion")
 
 
 def main():
@@ -156,13 +212,21 @@ def main():
         sys.exit(1)
     
     # Create output directory
-    output_dir = args.input_dir + args.output_suffix
+    if args.crop:
+        output_suffix = args.output_suffix.replace('_undistorted', '_undistorted_crop')
+    else:
+        output_suffix = args.output_suffix
+    
+    output_dir = args.input_dir + output_suffix
     print(f"Output directory: {output_dir}")
     
     # Process images
-    process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir)
+    process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir, args.crop)
     
-    print(f"Undistortion complete! Processed images saved to: {output_dir}")
+    if args.crop:
+        print(f"Undistortion and cropping complete! Processed images saved to: {output_dir}")
+    else:
+        print(f"Undistortion complete! Processed images saved to: {output_dir}")
 
 
 if __name__ == "__main__":
