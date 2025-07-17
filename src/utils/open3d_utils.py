@@ -2,6 +2,19 @@ import numpy as np
 import open3d as o3d
 import copy
 from scipy.spatial.transform import Rotation
+import cv2
+
+
+def vectors_to_mat(rot, trans):
+    # Convert rotation vector to rotation matrix
+    R_mat = Rotation.from_rotvec(rot).as_matrix()  # 3x3
+
+    # Create 4x4 transformation matrix
+    T = np.eye(4)
+    T[:3, :3] = R_mat
+    T[:3, 3] = trans
+
+    return T
 
 def create_o3d_from_numpy(np_points, np_colors):
     res = o3d.geometry.PointCloud()
@@ -18,16 +31,42 @@ def create_o3d_from_numpy(np_points, np_colors):
         
     return res
 
-def pc_from_rgbd(path_rgb, path_depth, pose):
-    color_raw = o3d.io.read_image(path_rgb)
+def pc_from_rgbd(path_rgb, path_depth, pose, intrinsics=o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault):
+    # Load images
+    color_bgr = cv2.imread(path_rgb)
+    color_rgb = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2RGB)
+    color_raw = o3d.geometry.Image(color_rgb)
     depth_raw = o3d.io.read_image(path_depth)
-    rgbd_image0 = o3d.geometry.RGBDImage.create_from_color_and_depth(color_raw, depth_raw, convert_rgb_to_intensity=False)
 
+    # Convert depth to numpy array for processing
+    depth_np = np.asarray(depth_raw)
+
+    # Normalize and convert to 8-bit image for edge detection
+    depth_uint8 = cv2.normalize(depth_np, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+    # Detect edges using Canny
+    edges = cv2.Canny(depth_uint8, 50, 150)
+
+    # Inflate edges using dilation
+    kernel = np.ones((5, 5), np.uint8)
+    edges_dilated = cv2.dilate(edges, kernel, iterations=1)
+
+    # Mask out noisy depth areas
+    depth_np[edges_dilated > 0] = 0
+
+    # Convert cleaned depth back to Open3D image
+    cleaned_depth = o3d.geometry.Image(depth_np)
+
+    # Create RGBD image
+    rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(
+        color_raw, cleaned_depth, convert_rgb_to_intensity=False)
+
+    # Create point cloud
     pointcloud = o3d.geometry.PointCloud.create_from_rgbd_image(
-            rgbd_image0,
-            o3d.camera.PinholeCameraIntrinsic(
-            o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault))
-    
+        rgbd_image,
+        o3d.camera.PinholeCameraIntrinsic(intrinsics)
+    )
+
     pointcloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
     pointcloud.transform(pose)
 
@@ -72,7 +111,7 @@ def pc_from_rgbd_with_mask(color_path, depth_path, mask, pose,
     pcd.points = o3d.utility.Vector3dVector(pts_world)
     return pcd
 
-def draw_pointclouds(pointclouds):
+def draw_pointclouds(pointclouds, trajs):
     if  isinstance(pointclouds, o3d.geometry.PointCloud):
         pointclouds = [pointclouds]
 
@@ -184,20 +223,6 @@ class CameraPose:
     @property
     def translation(self):
         return self.pose[:3, 3]
-
-def read_trajectory(filename):
-    traj = []
-    with open(filename, 'r') as f:
-        metastr = f.readline()
-        while metastr:
-            metadata = map(int, metastr.split())
-            mat = np.zeros(shape = (4, 4))
-            for i in range(4):
-                matstr = f.readline();
-                mat[i, :] = np.fromstring(matstr, dtype = float, sep=' \t')
-            traj.append(CameraPose(metadata, mat))
-            metastr = f.readline()
-    return traj
 
 def preprocess_point_cloud(pcd, voxel_size):
     # print(":: Downsample with a voxel size %.3f." % voxel_size)

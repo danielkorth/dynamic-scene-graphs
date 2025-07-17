@@ -45,7 +45,7 @@ def mask_first_frame_interactive(predictor, video_path, frame_idx = 0, viz=False
 
     fig, ax = plt.subplots(figsize=(9, 6))
     ax.set_title(f"Click to add points on frame {frame_idx}. Press 'Enter' or 'q' to finish.")
-    ax.imshow(img)
+    ax.imshow(img_pil)
 
     def onclick(event):
         if event.inaxes:
@@ -407,45 +407,45 @@ def refine_masks_with_complement(
 
     return out
 
-# def propagate_video(predictor, inference_state, video_path):
-#     video_segments = {}  # video_segments contains the per-frame segmentation results
-#     coverage_threshold = 0.6
-#     single_frame_seg = SAM2Segmenter(
-#         sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt",
-#         model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
-#     )
-#     img_names = os.listdir(video_path)
-#     img_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
+def propagate_video_plain(predictor, inference_state, video_path):
+    video_segments = {}  # video_segments contains the per-frame segmentation results
+    coverage_threshold = 0.6
+    single_frame_seg = SAM2Segmenter(
+        sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt",
+        model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
+    )
+    img_names = os.listdir(video_path)
+    img_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
 
-#     for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
-#         frame_masks = []
-#         video_segments[out_frame_idx] = {}
-#         last_idx = out_obj_ids[-1]
+    for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+        frame_masks = []
+        video_segments[out_frame_idx] = {}
+        last_idx = out_obj_ids[-1]
 
-#         for i, out_obj_id in enumerate(out_obj_ids):
-#             mask = (out_mask_logits[i] > 0.0).cpu().numpy()
-#             frame_masks.append({"segmentation": mask})
-#             video_segments[out_frame_idx].update({out_obj_id: mask})
+        for i, out_obj_id in enumerate(out_obj_ids):
+            mask = (out_mask_logits[i] > 0.0).cpu().numpy()
+            frame_masks.append({"segmentation": mask})
+            video_segments[out_frame_idx].update({out_obj_id: mask})
 
-#         # NOT WORKING YET
-#         union, coverage = mask_union_and_coverage(frame_masks)
-#         if coverage < coverage_threshold:
-#             img_pil = Image.open(os.path.join(video_path, f"{img_names[out_frame_idx]:05}")).convert("RGB")
-#             img_np = np.array(img_pil)
-#             masks = refine_masks_with_complement(single_frame_seg.mask_generator.predictor, img_np, union, frame_masks, new_only=True)
+        # NOT WORKING YET
+        union, coverage = mask_union_and_coverage(frame_masks)
+        if coverage < coverage_threshold:
+            img_pil = Image.open(os.path.join(video_path, f"{img_names[out_frame_idx]:05}")).convert("RGB")
+            img_np = np.array(img_pil)
+            masks = refine_masks_with_complement(single_frame_seg.mask_generator.predictor, img_np, union, frame_masks, new_only=True)
 
-#             # Add to predictor state
-#             for new_mask in masks:
-#                 last_idx = last_idx+1
-#                 _, obj_ids, mask_logits = predictor.add_new_mask(
-#                     inference_state=inference_state,
-#                     frame_idx=out_frame_idx,
-#                     obj_id=last_idx,
-#                     mask = new_mask["segmentation"].squeeze(),
-#                 )
-#                 print("hi")
+            # Add to predictor state
+            for new_mask in masks:
+                last_idx = last_idx+1
+                _, obj_ids, mask_logits = predictor.add_new_mask(
+                    inference_state=inference_state,
+                    frame_idx=out_frame_idx,
+                    obj_id=last_idx,
+                    mask = new_mask["segmentation"].squeeze(),
+                )
+                print("hi")
             
-#     return predictor, video_segments
+    return predictor, video_segments
 
 def propagate_video(predictor, inference_state, video_path, viz = False):
     video_segments = {}  # video_segments contains the per-frame segmentation results

@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import torch
 from sam2.build_sam import (build_sam2_video_predictor, build_sam2_camera_predictor,
-                            build_sam2_camera_predictor_multi)
+                            build_sam2_camera_predictor_multi, propagate_video_plain)
 import matplotlib
 matplotlib.use('TkAgg')  # Use Tkinter, Qt5, WebAgg, etc.
 import matplotlib.pyplot as plt
@@ -14,7 +14,7 @@ from utils.sam2_utils import (mask_first_frame_interactive, save_sam, mask_first
 # Configuration
 # SOURCE_FRAMES = './data/zed_office_sampled'  # Path to frames directory
 SOURCE_FRAMES = './data/tmp_tiny'  # Path to frames directory
-OUTPUT_DIR = './data/sam2_res'  # Where to save results
+OUTPUT_DIR = './data/sam2_res/zed_office'  # Where to save results
 MAX_FRAMES = 300  # Maximum frames to process
 MODEL_TYPE = 'vit_b'  # SAM model type
 CHECKPOINT_PATH = 'sam_vit_b_01ec64.pth'  # SAM checkpoint path
@@ -48,14 +48,14 @@ def main():
     frame_idx = 0
     ann_frame_idx = frame_idx
     
-    # predictor, inference_state = mask_first_frame_interactive(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
-    predictor, inference_state = mask_first_frame(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
+    predictor, inference_state = mask_first_frame_interactive(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
+    # predictor, inference_state = mask_first_frame(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
     # predictor, inference_state = mask_first_frame_multi(predictor, video_path=SOURCE_FRAMES, frame_idx=ann_frame_idx, viz=True)
 
     # Show the results
     # run propagation throughout the video and collect the results in a dict
     # predictor, video_segments = propagate_video(predictor, inference_state, video_path=SOURCE_FRAMES)
-    predictor, video_segments = propagate_video(predictor, inference_state, video_path=SOURCE_FRAMES)
+    predictor, video_segments = propagate_video_plain(predictor, inference_state, video_path=SOURCE_FRAMES)
 
     # render the segmentation results every few frames
     plt.close("all")
