@@ -3,37 +3,35 @@ import cv2
 import numpy as np
 import torch
 from sam2.build_sam import (build_sam2_video_predictor, build_sam2_camera_predictor,
-                            build_sam2_camera_predictor_multi, propagate_video_plain)
+                            build_sam2_camera_predictor_multi)
 import matplotlib
 matplotlib.use('TkAgg')  # Use Tkinter, Qt5, WebAgg, etc.
 import matplotlib.pyplot as plt
 from PIL import Image
 from utils.sam2_utils import (mask_first_frame_interactive, save_sam, mask_first_frame_multi,
-                              propagate_video, mask_first_frame, propagate_video_multi)
-
-# Configuration
-# SOURCE_FRAMES = './data/zed_office_sampled'  # Path to frames directory
-SOURCE_FRAMES = './data/tmp_tiny'  # Path to frames directory
-OUTPUT_DIR = './data/sam2_res/zed_office'  # Where to save results
-MAX_FRAMES = 300  # Maximum frames to process
-MODEL_TYPE = 'vit_b'  # SAM model type
-CHECKPOINT_PATH = 'sam_vit_b_01ec64.pth'  # SAM checkpoint path
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-os.makedirs(os.path.join(OUTPUT_DIR, "masks"), exist_ok=True)
-os.makedirs(os.path.join(OUTPUT_DIR, "visualizations"), exist_ok=True)
-
-# Create output directory
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# Load SAM model
-sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt"
-model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
+                              propagate_video, mask_first_frame, propagate_video_multi, propagate_video_plain)
+import argparse
 
 def main():
-    # predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=DEVICE)
-    predictor = build_sam2_camera_predictor(model_cfg, sam2_checkpoint, device=DEVICE)
+    parser = argparse.ArgumentParser(description="Run SAM2 multitrack segmentation.")
+    parser.add_argument('--source_frames', type=str, default='./data/sam2_res/zed_cooking/tmp', help='Path to frames directory')
+    parser.add_argument('--output_dir', type=str, default='./data/sam2_res/zed_cooking', help='Where to save results')
+    args = parser.parse_args()
+
+    SOURCE_FRAMES = args.source_frames  # Path to frames directory
+    OUTPUT_DIR = args.output_dir  # Where to save results
+    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(os.path.join(OUTPUT_DIR, "masks"), exist_ok=True)
+    os.makedirs(os.path.join(OUTPUT_DIR, "visualizations"), exist_ok=True)
+
+    # Load SAM model
+    sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt"
+    model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
+
+    predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=DEVICE)
+    # predictor = build_sam2_camera_predictor(model_cfg, sam2_checkpoint, device=DEVICE)
     # predictor = build_sam2_camera_predictor_multi(model_cfg, sam2_checkpoint, device=DEVICE)
 
     # scan all the JPEG frame names in this directory
@@ -60,7 +58,6 @@ def main():
     # render the segmentation results every few frames
     plt.close("all")
     save_sam(frame_names, frame_nums, video_segments, SOURCE_FRAMES, OUTPUT_DIR)
-
 
 
 if __name__ == "__main__":

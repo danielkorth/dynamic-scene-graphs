@@ -78,7 +78,7 @@ def visualize_zed_data(data_folder, pose_file, cam_params_file, max_frames=10, s
         )
         
         # Create transformation matrix
-        R = o3d.geometry.get_rotation_matrix_from_axis_angle(-rvec)
+        R = o3d.geometry.get_rotation_matrix_from_axis_angle(rvec)
         T = np.eye(4)
         T[:3, :3] = R
         T[:3, 3] = t_vec

@@ -11,6 +11,8 @@ from segment import SAM2Segmenter
 from utils.tools import get_bounding_box, sample_points_in_mask, mask_union_and_coverage
 from tqdm import tqdm
 from scipy.ndimage import binary_erosion
+from utils.tools import get_color_for_id  # Ensure import is present
+
 
 def show_mask(mask, ax, obj_id=None, random_color=False):
     if random_color:
@@ -319,7 +321,7 @@ def refine_masks_with_complement(
     elif isinstance(masks, list) and isinstance(masks[0], np.ndarray):
         all_seg = np.stack(masks, axis=0)
     elif isinstance(masks, np.ndarray):
-        pass
+        all_seg = masks[None]
     else:
         raise(Exception("Bad Mask Formatting"))
     
@@ -426,24 +428,6 @@ def propagate_video_plain(predictor, inference_state, video_path):
             mask = (out_mask_logits[i] > 0.0).cpu().numpy()
             frame_masks.append({"segmentation": mask})
             video_segments[out_frame_idx].update({out_obj_id: mask})
-
-        # NOT WORKING YET
-        union, coverage = mask_union_and_coverage(frame_masks)
-        if coverage < coverage_threshold:
-            img_pil = Image.open(os.path.join(video_path, f"{img_names[out_frame_idx]:05}")).convert("RGB")
-            img_np = np.array(img_pil)
-            masks = refine_masks_with_complement(single_frame_seg.mask_generator.predictor, img_np, union, frame_masks, new_only=True)
-
-            # Add to predictor state
-            for new_mask in masks:
-                last_idx = last_idx+1
-                _, obj_ids, mask_logits = predictor.add_new_mask(
-                    inference_state=inference_state,
-                    frame_idx=out_frame_idx,
-                    obj_id=last_idx,
-                    mask = new_mask["segmentation"].squeeze(),
-                )
-                print("hi")
             
     return predictor, video_segments
 
@@ -578,12 +562,20 @@ def propagate_video_multi(predictor, inference_state, video_path, viz = False):
     return predictor, video_segments
 
 def save_sam(frame_names, frame_nums, video_segments, video_folder, output_dir):
+    """
+    Save SAM masks and visualizations for each frame, using the correct original frame indices.
+    frame_names: list of image filenames (sampled from the video)
+    frame_nums: list of original frame indices corresponding to frame_names
+    video_segments: dict mapping frame index (0..len(frame_names)-1) to {obj_id: mask}
+    video_folder: path to the folder with video frames
+    output_dir: base output directory for masks and visualizations
+    """
     for out_frame_idx in range(0, len(frame_names)):
         frame_path = os.path.join(video_folder, frame_names[out_frame_idx])
         frame_img = Image.open(frame_path)
 
         fig, ax = plt.subplots(figsize=(6, 4))
-        ax.set_title(f"frame {out_frame_idx}")
+        ax.set_title(f"frame {frame_nums[out_frame_idx]}")
         ax.imshow(frame_img)
 
         for out_obj_id, out_mask in video_segments[out_frame_idx].items():
@@ -592,8 +584,12 @@ def save_sam(frame_names, frame_nums, video_segments, video_folder, output_dir):
             mask_path = os.path.join(output_dir, "masks", mask_filename)
             np.save(mask_path, out_mask)
 
-            # --- Show mask on the frame ---
-            show_mask(out_mask, ax, obj_id=out_obj_id)
+            # --- Show mask on the frame with consistent color ---
+            color = get_color_for_id(out_obj_id)
+            mask = out_mask
+            h, w = mask.shape[-2:]
+            mask_image = mask.reshape(h, w, 1) * np.array([*color, 0.6]).reshape(1, 1, -1)
+            ax.imshow(mask_image)
 
         # --- Save visualization as .png ---
         vis_filename = f"frame{frame_nums[out_frame_idx]:04d}.png"

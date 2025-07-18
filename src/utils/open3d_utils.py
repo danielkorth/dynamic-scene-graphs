@@ -55,20 +55,18 @@ def create_camera_mesh(scale=0.1, color = [0.9, 0.1, 0.1]):
 
     return line_set
 
-def vectors_to_mat(rot, trans):
+def rt_to_mat(rot, trans):
     # Convert rotation vector to rotation matrix
-    R_mat = Rotation.from_rotvec(rot).as_matrix()  # 3x3
-
-    # Create 4x4 transformation matrix
+    R = o3d.geometry.get_rotation_matrix_from_axis_angle(rot)
     T = np.eye(4)
-    T[:3, :3] = R_mat
+    T[:3, :3] = R
     T[:3, 3] = trans
 
     return T
 
-def mat_to_vectors(T):
+def mat_to_rt(T):
     """
-    Inverse of vectors_to_mat: extracts rotation vector and translation vector
+    Inverse of rt_to_mat: extracts rotation vector and translation vector
     from a 4x4 transformation matrix.
     
     Parameters:
@@ -103,6 +101,32 @@ def create_o3d_from_numpy(np_points, np_colors):
         
     return res
 
+def remove_edges_from_depth(depth_np):
+    """
+    Removes edges from a depth numpy array using Canny edge detection and dilation.
+    Returns a new depth array with edges set to zero.
+    """
+    depth_uint16 = depth_np.astype(np.uint16)
+    depth_uint8 = np.empty_like(depth_uint16, dtype=np.uint8)
+    cv2.normalize(depth_uint16, depth_uint8, 0, 255, cv2.NORM_MINMAX)
+    edges = cv2.Canny(depth_uint8, 50, 150)
+    kernel = np.ones((5, 5), np.uint8)
+    edges_dilated = cv2.dilate(edges, kernel, iterations=2)
+    depth_processed = depth_np.copy()
+    depth_processed[edges_dilated > 0] = 0
+
+    # --- Visualization of detected edges (for debugging) ---
+    # Uncomment the following lines to visualize edges side by side and scaled down
+    edges_combined = np.hstack((edges, edges_dilated))
+    scale_factor = 0.5  # Adjust as needed (e.g., 0.5 for half size)
+    edges_combined_small = cv2.resize(edges_combined, (0, 0), fx=scale_factor, fy=scale_factor)
+    cv2.imshow('Canny Edges (Left) | Canny Edges Dilated (Right)', edges_combined_small)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    # ------------------------------------------------------
+
+    return depth_processed
+
 def pc_from_rgbd(path_rgb, path_depth, pose, intrinsics=None, crop=None):
     if intrinsics is None:
         intrinsics = o3d.camera.PinholeCameraIntrinsic(
@@ -120,31 +144,10 @@ def pc_from_rgbd(path_rgb, path_depth, pose, intrinsics=None, crop=None):
         depth_np = center_crop(depth_np, crop)
         color_rgb = center_crop(color_rgb, crop)
 
+    # Remove edges from depth
+    depth_np = remove_edges_from_depth(depth_np)
+
     color_raw = o3d.geometry.Image(np.ascontiguousarray(color_rgb))    
-
-    # Normalize and convert to 8-bit image for edge detection
-    depth_uint8 = cv2.normalize(depth_np, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-
-    # Detect edges using Canny
-    edges = cv2.Canny(depth_uint8, 50, 150)
-
-    # Inflate edges using stronger dilation
-    kernel = np.ones((5, 5), np.uint8)
-    edges_dilated = cv2.dilate(edges, kernel, iterations=2)
-
-
-    # # --- Visualization of detected edges (for debugging) ---
-    # # Uncomment the following lines to visualize edges side by side and scaled down
-    # edges_combined = np.hstack((edges, edges_dilated))
-    # scale_factor = 0.5  # Adjust as needed (e.g., 0.5 for half size)
-    # edges_combined_small = cv2.resize(edges_combined, (0, 0), fx=scale_factor, fy=scale_factor)
-    # cv2.imshow('Canny Edges (Left) | Canny Edges Dilated (Right)', edges_combined_small)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-    # # ------------------------------------------------------
-
-    # Mask out noisy depth areas
-    depth_np[edges_dilated > 0] = 0
 
     # Convert cleaned depth back to Open3D image
     cleaned_depth = o3d.geometry.Image(np.ascontiguousarray(depth_np))
@@ -174,7 +177,11 @@ def pc_from_rgbd_with_mask(color_path, depth_path, mask, pose,
                            depth_trunc=3.0):
     # Load images
     color = np.asarray(o3d.io.read_image(color_path))
-    depth = np.asarray(o3d.io.read_image(depth_path)).astype(np.float64) / depth_scale
+    depth = np.asarray(o3d.io.read_image(depth_path)).astype(np.float64) 
+
+    # Remove edges from depth
+    depth = remove_edges_from_depth(depth)
+    depth = depth / depth_scale
 
     # Mask & valid depth
     valid = mask & (depth > 0) & (depth < depth_trunc)

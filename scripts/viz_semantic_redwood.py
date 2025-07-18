@@ -3,7 +3,8 @@ import glob
 import numpy as np
 import open3d as o3d
 from tqdm import tqdm
-from utils.open3d_utils import read_trajectory, pc_from_rgbd_with_mask
+from utils.open3d_utils import pc_from_rgbd_with_mask
+from utils.redwood import read_trajectory
 
 # --------------------------------------------
 # Utility: generate a consistent color per object ID
@@ -25,8 +26,8 @@ if __name__ == '__main__':
     path_rgb   = './data/living_room_1/livingroom1-color'
     path_depth = './data/living_room_1/livingroom1-depth-clean'
     traj_file  = './data/living_room_1/livingroom1-traj.txt'
-    mask_dir   = './data/sam2_res/masks'
-    vis_dir    = './data/sam2_res/visualizations'
+    mask_dir   = './data/sam2_res/sam2_res_old/masks'
+    vis_dir    = './data/sam2_res/sam2_res_old/visualizations'
 
     # Read trajectory
     traj = read_trajectory(traj_file)

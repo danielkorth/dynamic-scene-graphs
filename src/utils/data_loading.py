@@ -45,7 +45,7 @@ def load_poses(path, max_frames=None, subsample=None):
         translations = translations[:max_frames]
         rotations = rotations[:max_frames]
     
-    return translations, rotations
+    return translations, -rotations
 
 def load_colmap_poses(path, image_list=None, max_frames=None, subsample=None):
     """

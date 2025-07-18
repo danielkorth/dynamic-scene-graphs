@@ -1,5 +1,16 @@
 import numpy as np
 
+# --------------------------------------------
+# Utility: generate a consistent color per object ID
+# --------------------------------------------
+def get_color_for_id(obj_id):
+    golden_angle = 137.508
+    hue = (obj_id * golden_angle) % 360 / 360.0
+    import colorsys
+    r, g, b = colorsys.hsv_to_rgb(hue, 0.75, 0.90)
+    return [r, g, b]
+
+    
 def center_crop(img, crop_px):
     h, w = img.shape[:2]
     start_x = crop_px
