@@ -12,7 +12,7 @@ def visualize_zed_data(data_folder, pose_file, cam_params_file, max_frames=10, s
     # Load camera intrinsics
     config = configparser.ConfigParser()
     config.read(cam_params_file)
-    section = 'LEFT_CAM_2K'
+    section = 'LEFT_CAM_HD'
     fx = float(config[section]['fx'])
     fy = float(config[section]['fy'])
     cx = float(config[section]['cx'])

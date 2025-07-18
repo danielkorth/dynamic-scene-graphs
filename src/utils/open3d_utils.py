@@ -115,15 +115,15 @@ def remove_edges_from_depth(depth_np):
     depth_processed = depth_np.copy()
     depth_processed[edges_dilated > 0] = 0
 
-    # --- Visualization of detected edges (for debugging) ---
-    # Uncomment the following lines to visualize edges side by side and scaled down
-    edges_combined = np.hstack((edges, edges_dilated))
-    scale_factor = 0.5  # Adjust as needed (e.g., 0.5 for half size)
-    edges_combined_small = cv2.resize(edges_combined, (0, 0), fx=scale_factor, fy=scale_factor)
-    cv2.imshow('Canny Edges (Left) | Canny Edges Dilated (Right)', edges_combined_small)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    # ------------------------------------------------------
+    # # --- Visualization of detected edges (for debugging) ---
+    # # Uncomment the following lines to visualize edges side by side and scaled down
+    # edges_combined = np.hstack((edges, edges_dilated))
+    # scale_factor = 0.5  # Adjust as needed (e.g., 0.5 for half size)
+    # edges_combined_small = cv2.resize(edges_combined, (0, 0), fx=scale_factor, fy=scale_factor)
+    # cv2.imshow('Canny Edges (Left) | Canny Edges Dilated (Right)', edges_combined_small)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+    # # ------------------------------------------------------
 
     return depth_processed
 

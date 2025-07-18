@@ -22,13 +22,22 @@ if __name__ == '__main__':
     # Load camera intrinsics
     config = configparser.ConfigParser()
     config.read(cam_params_file)
-    section = 'LEFT_CAM_2K'
+    section = 'LEFT_CAM_HD'
     fx = float(config[section]['fx'])
     fy = float(config[section]['fy'])
     cx = float(config[section]['cx'])
     cy = float(config[section]['cy'])
-    width = 2208
-    height = 1242
+    # Get width and height from the first color image
+    sample_color_path = None
+    for f in sorted(os.listdir(data_folder)):
+        if f.startswith('left') and f.endswith('.png'):
+            sample_color_path = os.path.join(data_folder, f)
+            break
+    if sample_color_path is None:
+        raise RuntimeError(f"No color images found in {data_folder}")
+    sample_color = o3d.io.read_image(sample_color_path)
+    sample_color_np = np.asarray(sample_color)
+    height, width = sample_color_np.shape[0], sample_color_np.shape[1]
 
     # Load camera poses
     translations, rotations = load_poses(pose_file, max_frames=None, subsample=1)
