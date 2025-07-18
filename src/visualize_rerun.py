@@ -1,6 +1,7 @@
 from pathlib import Path
 import argparse
 import rerun as rr
+from utils.colmap_utils import load_colmap_poses
 from utils.data_loading import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, get_camera_matrix, get_distortion_coeffs
 from utils.rerun import setup_blueprint
 import numpy as np
@@ -10,12 +11,12 @@ from utils.cv2_utils import unproject_image
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Visualize ZED camera data in Rerun")
-    parser.add_argument("--max-frames", "-n", type=int, default=50, 
+    parser.add_argument("--max-frames", "-n", type=int, default=None, 
                        help="Maximum number of frames to load (default: all frames)")
     parser.add_argument("--subsample", "-s", type=int, default=None,
                        help="Subsample every Nth frame (default: no subsampling)")
     parser.add_argument("--data-dir", "-d", type=str, 
-                       default="/local/home/dkorth/Projects/dynamic-scene-graphs/data/recent",
+                       default="./data/zed/short/",
                        help="Path to data directory (default: data/recent)")
     parser.add_argument("--headless", action="store_true",
                        help="Run in headless mode (default: False)")
@@ -30,7 +31,7 @@ def main():
         rr.init("living_room", spawn=False, default_blueprint=setup_blueprint())
         rr.connect_grpc()
     else:
-        rr.init("living_room", spawn=True, default_blueprint=setup_blueprint())
+        rr.init("living_room", spawn=True)
 
     rr.set_time(timeline="world", sequence=0)
 
@@ -41,33 +42,55 @@ def main():
     data_dir = Path(args.data_dir)
     rgb_images = load_all_rgb_images(data_dir / "images", max_frames=args.max_frames, subsample=args.subsample)
     depth_images = load_all_depth_images(data_dir / "images", max_frames=args.max_frames, subsample=args.subsample)
+
+    # zed poses
     tvecs, rvecs = load_poses(data_dir / "poses.txt", max_frames=args.max_frames, subsample=args.subsample)
+    # colmap poses
+    # rvecs, tvecs, _ = load_colmap_poses(data_dir / "colmap_poses.txt", max_frames=args.max_frames, subsample=args.subsample)
+    # tvecs = tvecs * 0.005
 
     print(f"Loaded {len(rgb_images)} RGB images and {len(depth_images)} depth images")
     print(f"Loaded {len(tvecs)} poses (translations: {len(tvecs)}, rotations: {len(rvecs)})")
 
-    rr.log("world/camera/image", rr.ViewCoordinates.RDF)
+    rr.log("camera", rr.ViewCoordinates.RDF)
 
-    rr.log("world/camera/image", rr.Pinhole(
+    rr.log("camera/image", rr.Pinhole(
         resolution=[rgb_images[0].shape[1], rgb_images[0].shape[0]],
         principal_point=[intrinsics["cx"], intrinsics["cy"]],
         focal_length=[intrinsics["fx"], intrinsics["fy"]],
-    ))
+    ), static=True)
+
+    all_3d_points = []
+    centers = []
+    for i, (rgb, depth, tvec, rvec) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs)):
+        points_3d, _ = unproject_image(depth, K, dist, rvec, tvec)
+        all_3d_points.append(points_3d)
+        centers.append(tvec)
+
+    # randomly subsample points
+    all_3d_points = np.concatenate(all_3d_points, axis=0)
+    all_3d_points = all_3d_points[np.random.choice(len(all_3d_points), size=100000, replace=False)]
+    rr.log("world/points", rr.Points3D(all_3d_points, colors=[255, 0, 0]))
+
+    rr.log("world/cc", rr.Points3D(np.array(centers), colors=[0, 0, 255], radii=[0.01]))
 
     for i, (rgb, depth, tvec, rvec) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs)):
-        rr.log("world/camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
-
-        if args.use_depth:
-            points_3d, _ = unproject_image(depth, K, dist, rvec, tvec)
-            rr.log("world/points", rr.Points3D(points_3d, colors=[255, 0, 0]))
-        else:
-            rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000, depth_range=[0, 3000]))
-
-        rr.log("world/camera", rr.Transform3D(
-            rotation=rr.RotationAxisAngle(axis=rvec, angle=-float(np.linalg.norm(rvec))),
-            translation=-Rotation.from_rotvec(rvec).inv().apply(tvec)
+        print(np.linalg.norm(rvec)*i)
+        print(tvec)
+        rr.log("camera", rr.Transform3D(
+            mat3x3=Rotation.from_rotvec(-rvec).as_matrix(),
+            translation=tvec,
         ))
+        rr.log("camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
+
+        # if args.use_depth:
+        #     points_3d, _ = unproject_image(depth, K, dist, rvec, tvec)
+        #     rr.log("world/points", rr.Points3D(points_3d, colors=[255, 0, 0]))
+        # else:
+        #     rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000, depth_range=[0, 3000]))
+
         rr.set_time(timeline="world", sequence=i)
+
 
 if __name__ == "__main__":
     main()

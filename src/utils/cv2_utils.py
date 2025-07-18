@@ -48,11 +48,12 @@ def unproject_image(depth_image, K, dist, rvec, tvec, mask=None):
     # Scale by depth (convert mm to meters)
     depth_values_m = depth_valid / 1000.0
     undistorted_depth = undistorted_homo * depth_values_m.reshape(-1, 1)
-    
+    points_3d = undistorted_depth
     # Transform from camera frame to world frame
-    R = Rotation.from_rotvec(rvec).as_matrix()
+    R = Rotation.from_rotvec(-rvec).as_matrix()
+    # points_3d = (R @ undistorted_depth.T)
     points_3d = (R @ undistorted_depth.T + tvec.reshape(-1, 1)).T
-    
+
     return points_3d, pixel_coords
 
 

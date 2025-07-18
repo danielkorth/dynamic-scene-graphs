@@ -58,8 +58,8 @@ def find_image_files(input_dir):
     return rgb_files, depth_files
 
 
-def undistort_image(image, camera_matrix, dist_coeffs, output_size=None):
-    """Undistort a single image using camera parameters."""
+def undistort_rgb_image(image, camera_matrix, dist_coeffs, output_size=None):
+    """Undistort an RGB image using standard OpenCV undistortion."""
     if output_size is None:
         h, w = image.shape[:2]
         output_size = (w, h)
@@ -69,8 +69,34 @@ def undistort_image(image, camera_matrix, dist_coeffs, output_size=None):
         camera_matrix, dist_coeffs, output_size, 1, output_size
     )
     
-    # Undistort the image
+    # Undistort the image using standard method (good for RGB)
     undistorted = cv2.undistort(image, camera_matrix, dist_coeffs, None, new_camera_matrix)
+    
+    return undistorted, new_camera_matrix, roi
+
+
+def undistort_depth_image(image, camera_matrix, dist_coeffs, output_size=None):
+    """Undistort a depth image using nearest-neighbor interpolation to preserve depth values."""
+    if output_size is None:
+        h, w = image.shape[:2]
+        output_size = (w, h)
+    
+    # Generate optimal camera matrix for undistortion
+    new_camera_matrix, roi = cv2.getOptimalNewCameraMatrix(
+        camera_matrix, dist_coeffs, output_size, 1, output_size
+    )
+    
+    # Generate undistortion and rectification maps
+    # Use identity matrix for rotation (no rectification, just undistortion)
+    map1, map2 = cv2.initUndistortRectifyMap(
+        camera_matrix, dist_coeffs, np.eye(3), new_camera_matrix, output_size, cv2.CV_32FC1
+    )
+    
+    # Undistort the depth image using nearest-neighbor interpolation
+    # This preserves original depth values and avoids smooth edges
+    undistorted = cv2.remap(
+        image, map1, map2, interpolation=cv2.INTER_NEAREST
+    )
     
     return undistorted, new_camera_matrix, roi
 
@@ -97,15 +123,68 @@ def crop_to_roi(image, roi):
     return cropped
 
 
-def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir, crop=False):
+def update_intrinsics_for_crop(camera_matrix, roi):
+    """Update camera intrinsics after cropping to account for principal point shift.
+    
+    Args:
+        camera_matrix: 3x3 camera matrix from undistortion
+        roi: Region of Interest tuple (x, y, w, h) used for cropping
+        
+    Returns:
+        updated_camera_matrix: Camera matrix with adjusted principal point
+    """
+    x, y, w, h = roi
+    
+    # Handle invalid ROI
+    if w <= 0 or h <= 0:
+        return camera_matrix.copy()
+    
+    # Copy the camera matrix
+    updated_matrix = camera_matrix.copy()
+    
+    # Update principal point by subtracting crop offset
+    updated_matrix[0, 2] -= x  # cx -= x_offset
+    updated_matrix[1, 2] -= y  # cy -= y_offset
+    
+    return updated_matrix
+
+
+def save_updated_intrinsics(camera_matrix, roi, output_dir, original_intrinsics):
+    """Save updated camera intrinsics to a file after cropping.
+    
+    Args:
+        camera_matrix: Updated camera matrix
+        roi: ROI used for cropping
+        output_dir: Directory to save intrinsics file
+        original_intrinsics: Original intrinsics dict for reference
+    """
+    x, y, w, h = roi
+    
+    # Handle invalid ROI
+    if w <= 0 or h <= 0:
+        return
+    
+    # Save to file in simple format (just fx, fy, cx, cy)
+    intrinsics_file = os.path.join(output_dir, "camera_intrinsics_cropped.txt")
+    with open(intrinsics_file, 'w') as f:
+        f.write(f"{camera_matrix[0, 0]:.6f}\n")  # fx
+        f.write(f"{camera_matrix[1, 1]:.6f}\n")  # fy  
+        f.write(f"{camera_matrix[0, 2]:.6f}\n")  # cx
+        f.write(f"{camera_matrix[1, 2]:.6f}\n")  # cy
+    
+    return intrinsics_file
+
+
+def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir, crop=False, original_intrinsics=None):
     """Process and undistort all RGB and depth images."""
     os.makedirs(output_dir, exist_ok=True)
     
     # Variables to track ROI info for reporting
     roi_info = None
+    updated_camera_matrix = None
     
     # Process RGB images
-    print("Processing RGB images...")
+    print("Processing RGB images using standard undistortion...")
     for rgb_file in tqdm(rgb_files, desc="RGB images"):
         try:
             # Load RGB image
@@ -114,8 +193,8 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
                 print(f"Warning: Failed to load {rgb_file}")
                 continue
             
-            # Undistort RGB image
-            undistorted_rgb, _, roi = undistort_image(rgb_image, camera_matrix, dist_coeffs)
+            # Undistort RGB image using standard method
+            undistorted_rgb, new_camera_matrix, roi = undistort_rgb_image(rgb_image, camera_matrix, dist_coeffs)
             
             # Store ROI info for reporting (use first valid ROI)
             if roi_info is None and roi[2] > 0 and roi[3] > 0:
@@ -128,6 +207,9 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
             # Apply cropping if requested
             if crop:
                 undistorted_rgb = crop_to_roi(undistorted_rgb, roi)
+                # Update camera matrix for cropping (only need to do this once)
+                if updated_camera_matrix is None:
+                    updated_camera_matrix = update_intrinsics_for_crop(new_camera_matrix, roi)
             
             # Save undistorted (and possibly cropped) RGB image
             filename = os.path.basename(rgb_file)
@@ -135,11 +217,11 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
             cv2.imwrite(output_path, undistorted_rgb)
             
         except Exception as e:
-            print(f"Error processing {rgb_file}: {e}")
+            print(f"Error processing RGB image {rgb_file}: {e}")
             continue
     
     # Process depth images
-    print("Processing depth images...")
+    print("Processing depth images using nearest-neighbor interpolation...")
     for depth_file in tqdm(depth_files, desc="Depth images"):
         try:
             # Load depth image
@@ -148,12 +230,15 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
                 print(f"Warning: Failed to load {depth_file}")
                 continue
             
-            # Undistort depth image
-            undistorted_depth, _, roi = undistort_image(depth_image, camera_matrix, dist_coeffs)
+            # Undistort depth image using nearest-neighbor method
+            undistorted_depth, new_camera_matrix_depth, roi = undistort_depth_image(depth_image, camera_matrix, dist_coeffs)
             
             # Apply cropping if requested
             if crop:
                 undistorted_depth = crop_to_roi(undistorted_depth, roi)
+                # Update camera matrix for cropping (only need to do this once)  
+                if updated_camera_matrix is None:
+                    updated_camera_matrix = update_intrinsics_for_crop(new_camera_matrix_depth, roi)
             
             # Save undistorted (and possibly cropped) depth image
             filename = os.path.basename(depth_file)
@@ -161,7 +246,7 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
             cv2.imwrite(output_path, undistorted_depth)
             
         except Exception as e:
-            print(f"Error processing {depth_file}: {e}")
+            print(f"Error processing depth image {depth_file}: {e}")
             continue
     
     # Print ROI information if cropping was applied
@@ -171,6 +256,20 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
         print(f"  ROI (x,y,w,h): {roi_info['roi']}")
         print(f"  Cropped image size: {roi_info['cropped_size']}")
         print(f"  Removed black regions from undistortion")
+    
+    # Save updated intrinsics if cropping was applied
+    if crop and updated_camera_matrix is not None and original_intrinsics is not None and roi_info is not None:
+        intrinsics_file = save_updated_intrinsics(updated_camera_matrix, roi_info['roi'], output_dir, original_intrinsics)
+        print(f"\n✓ Updated camera intrinsics saved to: {intrinsics_file}")
+        print(f"  Original principal point: ({original_intrinsics['cx']:.1f}, {original_intrinsics['cy']:.1f})")
+        print(f"  Updated principal point:  ({updated_camera_matrix[0,2]:.1f}, {updated_camera_matrix[1,2]:.1f})")
+        print(f"  Crop offset applied: ({roi_info['roi'][0]}, {roi_info['roi'][1]})")
+        print(f"  ⚠️  Use the updated intrinsics for any computer vision operations on cropped images!")
+    
+    # Print method summary
+    print(f"\nUndistortion methods used:")
+    print(f"  RGB images: Standard cv2.undistort() with bilinear interpolation")
+    print(f"  Depth images: cv2.remap() with nearest-neighbor interpolation (preserves depth values)")
 
 
 def main():
@@ -221,7 +320,7 @@ def main():
     print(f"Output directory: {output_dir}")
     
     # Process images
-    process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir, args.crop)
+    process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir, args.crop, intrinsics)
     
     if args.crop:
         print(f"Undistortion and cropping complete! Processed images saved to: {output_dir}")
