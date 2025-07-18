@@ -5,20 +5,6 @@ from typing import List
 
 from utils.open3d_utils import CameraPose
 
-def read_trajectory(filename):
-    traj = []
-    with open(filename, 'r') as f:
-        metastr = f.readline()
-        while metastr:
-            metadata = map(int, metastr.split())
-            mat = np.zeros(shape = (4, 4))
-            for i in range(4):
-                matstr = f.readline();
-                mat[i, :] = np.fromstring(matstr, dtype = float, sep=' \t')
-            traj.append(CameraPose(metadata, mat))
-            metastr = f.readline()
-    return traj
-
 def load_all_color_images(color_dir: str) -> List[np.ndarray]:
     """Load all color images from the color directory as numpy arrays."""
     color_files = sorted([f for f in os.listdir(color_dir) if f.endswith('.jpg')])
