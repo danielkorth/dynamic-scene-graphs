@@ -316,7 +316,8 @@ def main():
     else:
         output_suffix = args.output_suffix
     
-    output_dir = args.input_dir + output_suffix
+    in_dir = args.input_dir if not args.input_dir.endswith('/') else args.input_dir[:-1]
+    output_dir = in_dir + output_suffix
     print(f"Output directory: {output_dir}")
     
     # Process images

@@ -1,5 +1,13 @@
 import numpy as np
 
+def center_crop(img, crop_px):
+    h, w = img.shape[:2]
+    start_x = crop_px
+    start_y = crop_px
+    end_x = w - crop_px
+    end_y = h - crop_px
+    return img[start_y:end_y, start_x:end_x]
+
 def get_bounding_box(mask):
     """
     Returns the bounding box coordinates (y_min, x_min, y_max, x_max) from a 2D binary mask.

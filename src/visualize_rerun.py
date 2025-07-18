@@ -7,6 +7,7 @@ from utils.rerun import setup_blueprint
 import numpy as np
 from scipy.spatial.transform import Rotation
 from utils.cv2_utils import unproject_image
+import time
 
 def main():
     # Parse command line arguments
@@ -16,12 +17,13 @@ def main():
     parser.add_argument("--subsample", "-s", type=int, default=None,
                        help="Subsample every Nth frame (default: no subsampling)")
     parser.add_argument("--data-dir", "-d", type=str, 
-                       default="./data/zed/short/",
-                       help="Path to data directory (default: data/recent)")
+                       default="./data/zed/short",
+                       help="Path to data directory (default: data/zed/short)")
     parser.add_argument("--headless", action="store_true",
                        help="Run in headless mode (default: False)")
-    parser.add_argument("--use_depth", action="store_true",
-                       help="Use depth images (default: False)")
+    parser.add_argument("--use_depth", action="store_false",
+                       help="Do not use depth images (default: use depth images)")
+    parser.set_defaults(no_depth=False)
     args = parser.parse_args()
 
     print(args)
