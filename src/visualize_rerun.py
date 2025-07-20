@@ -2,8 +2,9 @@ from pathlib import Path
 import argparse
 import rerun as rr
 from utils.colmap_utils import load_colmap_poses
-from utils.data_loading import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, get_camera_matrix, get_distortion_coeffs
+from utils.data_loading import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, load_all_masks, get_camera_matrix, get_distortion_coeffs
 from utils.rerun import setup_blueprint
+from utils.tools import get_color_for_id
 import numpy as np
 from scipy.spatial.transform import Rotation
 from utils.cv2_utils import unproject_image
@@ -17,8 +18,11 @@ def main():
     parser.add_argument("--subsample", "-s", type=int, default=None,
                        help="Subsample every Nth frame (default: no subsampling)")
     parser.add_argument("--data-dir", "-d", type=str, 
-                       default="./data/zed/short",
+                       default="./data/zed/cooking",
                        help="Path to data directory (default: data/zed/short)")
+    parser.add_argument("--masks-dir", "-m", type=str,
+                       default="./data/results/cooking/masks",
+                       help="Path to masks directory (default: data/results/cooking/masks)")
     parser.add_argument("--headless", action="store_true",
                        help="Run in headless mode (default: False)")
     parser.add_argument("--use_depth", action="store_false",
@@ -30,20 +34,23 @@ def main():
     # set up rerun env
     if args.headless:
         # ensure that a rerun server is running (rerun --serve)
-        rr.init("living_room", spawn=False, default_blueprint=setup_blueprint())
-        rr.connect_grpc()
+        # rr.init("living_room", spawn=False, default_blueprint=setup_blueprint())
+        # rr.connect_grpc()
+        pass
     else:
-        rr.init("living_room", spawn=True)
+        rr.init("living_room", spawn=True, default_blueprint=setup_blueprint())
 
     rr.set_time(timeline="world", sequence=0)
+    rr.log("world", rr.ViewCoordinates.RDF)
 
-    intrinsics = load_camera_intrinsics("./data/SN35693142.conf", camera="left", resolution="2K")
+    intrinsics = load_camera_intrinsics("./data/SN35693142.conf", camera="left", resolution="HD")
     K = get_camera_matrix(intrinsics)
     dist = get_distortion_coeffs(intrinsics)
 
     data_dir = Path(args.data_dir)
     rgb_images = load_all_rgb_images(data_dir / "images", max_frames=args.max_frames, subsample=args.subsample)
     depth_images = load_all_depth_images(data_dir / "images", max_frames=args.max_frames, subsample=args.subsample)
+    mask_images = load_all_masks(args.masks_dir, max_frames=args.max_frames, subsample=args.subsample)
 
     # zed poses
     tvecs, rvecs = load_poses(data_dir / "poses.txt", max_frames=args.max_frames, subsample=args.subsample)
@@ -62,37 +69,38 @@ def main():
         focal_length=[intrinsics["fx"], intrinsics["fy"]],
     ), static=True)
 
-    all_3d_points = []
-    centers = []
-    for i, (rgb, depth, tvec, rvec) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs)):
-        points_3d, _ = unproject_image(depth, K, dist, rvec, tvec)
-        all_3d_points.append(points_3d)
-        centers.append(tvec)
+    # all_3d_points = []
+    # centers = []
+    from scenegraph.graph import SceneGraph
+    from scenegraph.node import Node
+    graph = SceneGraph()
 
-    # randomly subsample points
-    all_3d_points = np.concatenate(all_3d_points, axis=0)
-    all_3d_points = all_3d_points[np.random.choice(len(all_3d_points), size=100000, replace=False)]
-    rr.log("world/points", rr.Points3D(all_3d_points, colors=[255, 0, 0]))
-
-    rr.log("world/cc", rr.Points3D(np.array(centers), colors=[0, 0, 255], radii=[0.01]))
-
-    for i, (rgb, depth, tvec, rvec) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs)):
-        print(np.linalg.norm(rvec)*i)
-        print(tvec)
+    for i, (rgb, depth, tvec, rvec, mask_dict) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs, mask_images)):
         rr.log("camera", rr.Transform3D(
-            mat3x3=Rotation.from_rotvec(-rvec).as_matrix(),
+            mat3x3=Rotation.from_rotvec(rvec).as_matrix(),
             translation=tvec,
         ))
         rr.log("camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
 
-        # if args.use_depth:
-        #     points_3d, _ = unproject_image(depth, K, dist, rvec, tvec)
-        #     rr.log("world/points", rr.Points3D(points_3d, colors=[255, 0, 0]))
-        # else:
-        #     rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000, depth_range=[0, 3000]))
+        for obj_id, mask in mask_dict.items():
+            if mask.sum() == 0:
+                continue
+            points_3d, _ = unproject_image(depth, K, dist, rvec, tvec, mask)
+            centroid = np.mean(points_3d, axis=0)
+
+            if f"obj_{obj_id}" not in graph:
+                # Generate unique color for this object
+                color = np.array(get_color_for_id(obj_id))
+                graph.add_node(Node(f"obj_{obj_id}", centroid, color=color, pct=points_3d))
+            else:
+                graph.nodes[f'obj_{obj_id}'].pct = points_3d
+                graph.nodes[f'obj_{obj_id}'].centroid = centroid
+
+        print("Graph size: ", len(graph))
+
+        graph.log_rerun(show_pct=True)
 
         rr.set_time(timeline="world", sequence=i)
-
 
 if __name__ == "__main__":
     main()

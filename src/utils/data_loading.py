@@ -310,3 +310,128 @@ def load_all_depth_images(images_dir, max_frames=None, subsample=None):
         depth_images.append(depth_image)
     
     return np.array(depth_images)
+
+def load_all_masks(masks_dir, max_frames=None, subsample=None):
+    """Load all mask files from a directory and group them by frame and object
+    
+    Note: Masks are typically pre-subsampled (e.g., every 10th frame) while RGB/depth 
+    images are saved for nearly every frame. This function handles synchronization
+    by applying subsampling relative to the mask sampling rate.
+    
+    Args:
+        masks_dir: Path to the masks directory containing frameXXXX_objY.npy files
+        max_frames: Maximum number of frames to load (None for all)
+        subsample: Subsample every Nth frame (None for no subsampling)
+        
+    Returns:
+        mask_frames: list of dicts, where each dict maps object_id -> mask (squeezed)
+                    Each list element corresponds to a frame in chronological order
+    """
+    # Find all mask files and extract frame numbers
+    mask_pattern = os.path.join(masks_dir, "frame*_obj*.npy")
+    mask_files = glob.glob(mask_pattern)
+    
+    if not mask_files:
+        raise FileNotFoundError(f"No mask files found in {masks_dir}")
+    
+    # Parse frame numbers and object IDs, group by frame
+    frame_obj_map = {}  # frame_num -> {obj_id -> filepath}
+    
+    for mask_file in mask_files:
+        filename = os.path.basename(mask_file)
+        # Parse filename like "frame0700_obj5.npy"
+        base_name = filename.replace('.npy', '')
+        parts = base_name.split('_obj')
+        
+        if len(parts) != 2:
+            print(f"Warning: Skipping file with unexpected name format: {filename}")
+            continue
+            
+        try:
+            frame_num = int(parts[0].replace('frame', ''))
+            obj_id = int(parts[1])
+        except ValueError:
+            print(f"Warning: Could not parse frame/object numbers from: {filename}")
+            continue
+        
+        if frame_num not in frame_obj_map:
+            frame_obj_map[frame_num] = {}
+        frame_obj_map[frame_num][obj_id] = mask_file
+    
+    # Sort frame numbers to get chronological order
+    frame_numbers = sorted(frame_obj_map.keys())
+    
+    if not frame_numbers:
+        return []
+    
+    # To synchronize with RGB/depth data, we need to simulate what frames would be
+    # selected if we applied the same subsample/max_frames to a continuous sequence
+    # starting from the first mask frame
+    if subsample is not None or max_frames is not None:
+        start_frame = frame_numbers[0]
+        
+        # Generate the frame sequence that RGB/depth would select
+        target_frames = []
+        frame_idx = 0
+        current_frame = start_frame
+        
+        while True:
+            # Apply subsampling
+            if subsample is None or frame_idx % subsample == 0:
+                target_frames.append(current_frame)
+                
+                # Apply max_frames limit
+                if max_frames is not None and len(target_frames) >= max_frames:
+                    break
+            
+            frame_idx += 1
+            current_frame += 1
+            
+            # Stop if we've gone beyond the last available mask frame
+            if current_frame > frame_numbers[-1]:
+                break
+        
+        # Find the closest available mask frames for each target frame
+        selected_frames = []
+        available_set = set(frame_numbers)
+        
+        for target_frame in target_frames:
+            # Find the closest available mask frame
+            best_frame = None
+            min_distance = float('inf')
+            
+            for available_frame in frame_numbers:
+                distance = abs(available_frame - target_frame)
+                if distance < min_distance:
+                    min_distance = distance
+                    best_frame = available_frame
+            
+            if best_frame is not None and best_frame not in selected_frames:
+                selected_frames.append(best_frame)
+        
+        frame_numbers = selected_frames
+    
+    # Load masks for each selected frame
+    mask_frames = []
+    
+    for frame_num in tqdm(frame_numbers, desc="Loading mask frames"):
+        frame_masks = {}
+        
+        # Load all objects for this frame
+        for obj_id, mask_file in frame_obj_map[frame_num].items():
+            try:
+                mask = np.load(mask_file)
+                
+                # Squeeze the extra dimension (1, H, W) -> (H, W)
+                if mask.ndim == 3 and mask.shape[0] == 1:
+                    mask = mask.squeeze(0)
+                
+                frame_masks[obj_id] = mask
+                
+            except Exception as e:
+                print(f"Warning: Failed to load {mask_file}: {e}")
+                continue
+        
+        mask_frames.append(frame_masks)
+    
+    return mask_frames
