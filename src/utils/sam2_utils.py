@@ -231,24 +231,23 @@ def mask_first_frame(predictor,
         plt.tight_layout()
         plt.show()
 
-    # 2) Initialize inference state
-    predictor.load_first_frame(img_np)
 
-    # 3) For each mask, compute a representative point and feed as prompt
+    inference_state = predictor.init_state(video_path=video_path)
+    predictor.reset_state(inference_state)
+    prompts = {}
     for obj_id, mask in enumerate(masks):
-
         points = mask['point_coords']
         labels = np.ones(len(points), dtype=np.int32)
 
-        # Add to predictor state
-        _, out_obj_ids, out_mask_logits = predictor.add_new_points(
+        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+            inference_state=inference_state,
             frame_idx=frame_idx,
             obj_id=obj_id,
             points=points,
             labels=labels,
         )
 
-    return predictor, None
+    return predictor, inference_state
 
 
 def sample_points_per_cc(
