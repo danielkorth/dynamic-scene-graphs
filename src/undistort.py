@@ -275,7 +275,7 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
     print(f"  Depth images: cv2.remap() with nearest-neighbor interpolation (preserves depth values)")
 
 
-@hydra.main(config_path="../config", config_name="undistort.yaml")
+@hydra.main(config_path="../config", config_name="undistort")
 def main(cfg: DictConfig):
     """Main function."""
     # Handle missing config parameters with defaults

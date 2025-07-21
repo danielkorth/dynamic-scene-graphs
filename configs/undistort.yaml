@@ -1,5 +1,6 @@
 defaults:
   - paths: default
+  - _self_
 
 recording: ???
 input_dir: ${paths.data_dir}zed/${recording}/images

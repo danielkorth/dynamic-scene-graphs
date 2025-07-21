@@ -411,11 +411,6 @@ def refine_masks_with_complement(
 
 def propagate_video_plain(predictor, inference_state, video_path):
     video_segments = {}  # video_segments contains the per-frame segmentation results
-    coverage_threshold = 0.6
-    single_frame_seg = SAM2Segmenter(
-        sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt",
-        model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
-    )
     img_names = os.listdir(video_path)
     img_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
 

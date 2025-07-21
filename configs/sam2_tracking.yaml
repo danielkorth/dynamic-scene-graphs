@@ -1,0 +1,24 @@
+defaults:
+  - paths: default
+  - sam: tiny
+  - _self_
+
+# needs to be provided
+recording: ???
+
+# Input/Output Paths  
+source_folder: ${paths.data_dir}zed/${recording}/images_undistorted
+masks_output_folder: ${paths.data_dir}/zed/${recording}/masks
+mask_images_output_folder: ${paths.data_dir}/zed/${recording}/mask_images
+temp_folder: ${paths.output_dir}/temp_frames
+
+# Frame Processing
+stride: 1  # Select every Nth frame (default: 1)
+max_frames: 0  # Max frames to process, 0=no limit (default: 0)
+
+# SAM2 Model Configuration
+device: "auto"  # "cuda", "cpu", or "auto" (default: "auto")
+
+# Processing Options
+jpeg_quality: 100  # JPEG quality 1-100 (default: 95)
+cleanup_temp: true  # Remove temp files after processing (default: true)

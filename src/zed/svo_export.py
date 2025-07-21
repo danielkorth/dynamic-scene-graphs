@@ -160,19 +160,9 @@ def main(opt):
                     # Convert to uint16
                     depth_uint16 = depth_data.astype(np.uint16)
                     
-                    # print("Original depth data shape:", depth_data.shape)
-                    # print("Original depth data sample:", depth_data[600:605, 1100:1105])
-                    # print("Converted uint16 sample:", depth_uint16[600:605, 1100:1105])
-                    
                     # Save as single-channel uint16 PNG
                     cv2.imwrite(str(filename2), depth_uint16)
                     
-                    # Read back using UNCHANGED flag to preserve exact bit depth and channels
-                    # read_back = cv2.imread(str(filename2), cv2.IMREAD_UNCHANGED)
-                    # print("Read back shape:", read_back.shape)
-                    # print("Read back sample:", read_back[600:605, 1100:1105])
-                    # print("Data types - original:", depth_uint16.dtype, "read back:", read_back.dtype)
-
             # Display progress
             progress_bar((svo_position + 1) / nb_frames * 100, 30)
         if err == sl.ERROR_CODE.END_OF_SVOFILE_REACHED:

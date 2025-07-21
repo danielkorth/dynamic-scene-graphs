@@ -1,0 +1,2 @@
+sam2_checkpoint: "${paths.checkpoints_dir}/sam2.1_hiera_tiny.pt"
+model_config: "/${paths.root_dir}/sam2/sam2/configs/sam2.1/sam2.1_hiera_t.yaml"
