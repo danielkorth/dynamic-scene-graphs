@@ -4,13 +4,11 @@ Script to undistort ZED camera RGB and depth images.
 
 Usage:
     python src/undistort.py recording=<recording_name>
-    python src/undistort.py recording=<recording_name> undistort=true
 
 Examples:
     python src/undistort.py recording=new
-    python src/undistort.py recording=new undistort=true
     
-When undistort=true, cropping is automatically enabled to remove black regions 
+The script automatically undistorts and crops images to remove black regions 
 created by undistortion, producing clean rectangular images with only valid pixel data.
 """
 
@@ -152,18 +150,17 @@ def save_intrinsics(camera_matrix, output_dir):
     return intrinsics_file
 
 
-def get_final_camera_matrix(rgb_files, depth_files, camera_matrix, dist_coeffs, crop):
-    """Get the final camera matrix after undistortion and optional cropping.
+def get_final_camera_matrix(rgb_files, depth_files, camera_matrix, dist_coeffs):
+    """Get the final camera matrix after undistortion and cropping.
     
     Args:
         rgb_files: List of RGB image files
         depth_files: List of depth image files  
         camera_matrix: Original camera matrix
         dist_coeffs: Distortion coefficients
-        crop: Whether cropping will be applied
         
     Returns:
-        final_camera_matrix: Camera matrix after undistortion and optional cropping
+        final_camera_matrix: Camera matrix after undistortion and cropping
     """
     # Use first available image to determine final camera matrix
     test_image = None
@@ -182,15 +179,11 @@ def get_final_camera_matrix(rgb_files, depth_files, camera_matrix, dist_coeffs, 
     # Get undistorted camera matrix and ROI
     _, new_camera_matrix, roi = undistort_func(test_image, camera_matrix, dist_coeffs)
     
-    # Apply cropping adjustment if needed
-    if crop:
-        return update_intrinsics_for_crop(new_camera_matrix, roi)
-    else:
-        return new_camera_matrix
+    # Apply cropping adjustment
+    return update_intrinsics_for_crop(new_camera_matrix, roi)
 
 
-
-def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir, crop=False):
+def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir):
     """Process and undistort all RGB and depth images."""
     os.makedirs(output_dir, exist_ok=True)
     
@@ -219,14 +212,13 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
                     'cropped_size': f"{roi[2]}x{roi[3]}"
                 }
             
-            # Apply cropping if requested
-            if crop:
-                undistorted_rgb = crop_to_roi(undistorted_rgb, roi)
-                # Update camera matrix for cropping (only need to do this once)
-                if updated_camera_matrix is None:
-                    updated_camera_matrix = update_intrinsics_for_crop(new_camera_matrix, roi)
+            # Apply cropping to remove black regions
+            undistorted_rgb = crop_to_roi(undistorted_rgb, roi)
+            # Update camera matrix for cropping (only need to do this once)
+            if updated_camera_matrix is None:
+                updated_camera_matrix = update_intrinsics_for_crop(new_camera_matrix, roi)
             
-            # Save undistorted (and possibly cropped) RGB image
+            # Save undistorted and cropped RGB image
             filename = os.path.basename(rgb_file)
             output_path = os.path.join(output_dir, filename)
             cv2.imwrite(output_path, undistorted_rgb)
@@ -248,14 +240,13 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
             # Undistort depth image using nearest-neighbor method
             undistorted_depth, new_camera_matrix_depth, roi = undistort_depth_image(depth_image, camera_matrix, dist_coeffs)
             
-            # Apply cropping if requested
-            if crop:
-                undistorted_depth = crop_to_roi(undistorted_depth, roi)
-                # Update camera matrix for cropping (only need to do this once)  
-                if updated_camera_matrix is None:
-                    updated_camera_matrix = update_intrinsics_for_crop(new_camera_matrix_depth, roi)
+            # Apply cropping to remove black regions
+            undistorted_depth = crop_to_roi(undistorted_depth, roi)
+            # Update camera matrix for cropping (only need to do this once)  
+            if updated_camera_matrix is None:
+                updated_camera_matrix = update_intrinsics_for_crop(new_camera_matrix_depth, roi)
             
-            # Save undistorted (and possibly cropped) depth image
+            # Save undistorted and cropped depth image
             filename = os.path.basename(depth_file)
             output_path = os.path.join(output_dir, filename)
             cv2.imwrite(output_path, undistorted_depth)
@@ -264,15 +255,13 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
             print(f"Error processing depth image {depth_file}: {e}")
             continue
     
-    # Print ROI information if cropping was applied
-    if crop and roi_info:
+    # Print ROI information
+    if roi_info:
         print(f"\nCropping applied:")
         print(f"  Original image size: {roi_info['original_size']}")
         print(f"  ROI (x,y,w,h): {roi_info['roi']}")
         print(f"  Cropped image size: {roi_info['cropped_size']}")
         print(f"  Removed black regions from undistortion")
-    
-    # Note: Intrinsics will be saved at the end of main() function
     
     # Print method summary
     print(f"\nUndistortion methods used:")
@@ -289,9 +278,8 @@ def main(cfg: DictConfig):
         print("Error: recording must be provided. Use: python src/undistort.py recording=<recording_name>")
         sys.exit(1)
 
-    # crop is automatically true when undistort is true
-    crop = cfg.undistort
-    output_suffix = "_undistorted"
+    # Always undistort and crop
+    output_suffix = "_undistorted_crop"
     
     # Validate input directory
     if not os.path.exists(cfg.input_dir):
@@ -328,27 +316,19 @@ def main(cfg: DictConfig):
         sys.exit(1)
     
     # Create output directory
-    if crop:
-        output_suffix = output_suffix.replace('_undistorted', '_undistorted_crop')
-    
     in_dir = cfg.input_dir if not cfg.input_dir.endswith('/') else cfg.input_dir[:-1]
     output_dir = in_dir + output_suffix
     print(f"Output directory: {output_dir}")
     
     # Process images
-    process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir, crop)
+    process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir)
     
     # Save final camera intrinsics
-    final_camera_matrix = get_final_camera_matrix(rgb_files, depth_files, camera_matrix, dist_coeffs, crop)
+    final_camera_matrix = get_final_camera_matrix(rgb_files, depth_files, camera_matrix, dist_coeffs)
     intrinsics_file = save_intrinsics(final_camera_matrix, output_dir)
     
-    status = "cropped" if crop else "undistorted"
-    print(f"\n✓ Camera intrinsics ({status}) saved to: {intrinsics_file}")
-    
-    if crop:
-        print(f"Undistortion and cropping complete! Processed images saved to: {output_dir}")
-    else:
-        print(f"Undistortion complete! Processed images saved to: {output_dir}")
+    print(f"\n✓ Camera intrinsics (undistorted and cropped) saved to: {intrinsics_file}")
+    print(f"Undistortion and cropping complete! Processed images saved to: {output_dir}")
 
 
 if __name__ == "__main__":
