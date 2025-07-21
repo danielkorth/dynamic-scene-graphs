@@ -910,7 +910,7 @@ class SAM2CameraPredictor(SAM2Base):
     ):
         """Propagate the input points across frames to track in the entire video."""
 
-        self.propagate_in_video_preflight(self.condition_state)
+        self.propagate_in_video_preflight()
 
         output_dict = self.condition_state["output_dict"]
         consolidated_frame_inds = self.condition_state["consolidated_frame_inds"]
