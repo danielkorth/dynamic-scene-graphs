@@ -3,46 +3,29 @@
 Script to undistort ZED camera RGB and depth images.
 
 Usage:
-    python src/undistort.py <input_directory>
-    python src/undistort.py <input_directory> --crop
+    python src/undistort.py recording=<recording_name>
+    python src/undistort.py recording=<recording_name> undistort=true
 
 Examples:
-    python src/undistort.py data/zed/new/images
-    python src/undistort.py data/zed/new/images --crop
+    python src/undistort.py recording=new
+    python src/undistort.py recording=new undistort=true
     
-The --crop option removes black regions created by undistortion, producing 
-clean rectangular images with only valid pixel data.
+When undistort=true, cropping is automatically enabled to remove black regions 
+created by undistortion, producing clean rectangular images with only valid pixel data.
 """
 
-import argparse
 import os
 import sys
 import glob
 import cv2
 import numpy as np
 from tqdm import tqdm
+import hydra
+from omegaconf import DictConfig
 
 # Add src to path to import utilities
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.utils.data_loading import load_camera_intrinsics, get_camera_matrix, get_distortion_coeffs
-
-
-def parse_arguments():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Undistort ZED camera RGB and depth images')
-    parser.add_argument('input_dir', help='Input directory containing left*.png and depth*.png images')
-    parser.add_argument('--config', default='data/SN35693142.conf', 
-                       help='Camera configuration file (default: data/SN35693142.conf)')
-    parser.add_argument('--output-suffix', default='_undistorted',
-                       help='Suffix to add to output directory name (default: _undistorted)')
-    parser.add_argument('--camera', default='left', choices=['left', 'right'],
-                       help='Camera to use (default: left)')
-    parser.add_argument('--resolution', default='2K', choices=['2K', 'FHD', 'HD', 'VGA'],
-                       help='Camera resolution (default: 2K)')
-    parser.add_argument('--crop', action='store_true',
-                       help='Crop undistorted images to remove black regions (creates rectangular images with only valid pixels)')
-    
-    return parser.parse_args()
 
 
 def find_image_files(input_dir):
@@ -147,6 +130,26 @@ def update_intrinsics_for_crop(camera_matrix, roi):
     updated_matrix[1, 2] -= y  # cy -= y_offset
     
     return updated_matrix
+
+
+def save_intrinsics(camera_matrix, output_dir):
+    """Save camera intrinsics to intrinsics.txt file.
+    
+    Args:
+        camera_matrix: 3x3 camera matrix
+        output_dir: Directory to save intrinsics file
+    
+    Returns:
+        intrinsics_file: Path to saved intrinsics file
+    """
+    intrinsics_file = os.path.join(output_dir, "intrinsics.txt")
+    with open(intrinsics_file, 'w') as f:
+        f.write(f"{camera_matrix[0, 0]:.6f}\n")  # fx
+        f.write(f"{camera_matrix[1, 1]:.6f}\n")  # fy  
+        f.write(f"{camera_matrix[0, 2]:.6f}\n")  # cx
+        f.write(f"{camera_matrix[1, 2]:.6f}\n")  # cy
+    
+    return intrinsics_file
 
 
 def save_updated_intrinsics(camera_matrix, roi, output_dir, original_intrinsics):
@@ -272,30 +275,39 @@ def process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_di
     print(f"  Depth images: cv2.remap() with nearest-neighbor interpolation (preserves depth values)")
 
 
-def main():
+@hydra.main(config_path="../config", config_name="undistort.yaml")
+def main(cfg: DictConfig):
     """Main function."""
-    args = parse_arguments()
+    # Handle missing config parameters with defaults
+    recording = cfg.get('recording', None)
+    if recording is None:
+        print("Error: recording must be provided. Use: python src/undistort.py recording=<recording_name>")
+        sys.exit(1)
+
+    # crop is automatically true when undistort is true
+    crop = cfg.undistort
+    output_suffix = "_undistorted"
     
     # Validate input directory
-    if not os.path.exists(args.input_dir):
-        print(f"Error: Input directory '{args.input_dir}' does not exist")
+    if not os.path.exists(cfg.input_dir):
+        print(f"Error: Input directory '{cfg.input_dir}' does not exist")
         sys.exit(1)
     
     # Validate config file
-    if not os.path.exists(args.config):
-        print(f"Error: Config file '{args.config}' does not exist")
+    if not os.path.exists(cfg.config_file):
+        print(f"Error: Config file '{cfg.config_file}' does not exist")
         sys.exit(1)
     
-    print(f"Input directory: {args.input_dir}")
-    print(f"Config file: {args.config}")
+    print(f"Input directory: {cfg.input_dir}")
+    print(f"Config file: {cfg.config_file}")
     
     # Load camera intrinsics
     try:
-        intrinsics = load_camera_intrinsics(args.config, args.camera, args.resolution)
+        intrinsics = load_camera_intrinsics(cfg.config_file, cfg.camera, cfg.resolution)
         camera_matrix = get_camera_matrix(intrinsics)
         dist_coeffs = get_distortion_coeffs(intrinsics)
         
-        print(f"Loaded camera intrinsics for {args.camera.upper()}_CAM_{args.resolution.upper()}")
+        print(f"Loaded camera intrinsics for {cfg.camera.upper()}_CAM_{cfg.resolution.upper()}")
         print(f"Camera matrix:\n{camera_matrix}")
         print(f"Distortion coeffs: {dist_coeffs}")
         
@@ -304,29 +316,62 @@ def main():
         sys.exit(1)
     
     # Find image files
-    rgb_files, depth_files = find_image_files(args.input_dir)
+    rgb_files, depth_files = find_image_files(cfg.input_dir)
     
     if not rgb_files and not depth_files:
         print("No image files found in input directory")
         sys.exit(1)
     
     # Create output directory
-    if args.crop:
-        output_suffix = args.output_suffix.replace('_undistorted', '_undistorted_crop')
-    else:
-        output_suffix = args.output_suffix
+    if crop:
+        output_suffix = output_suffix.replace('_undistorted', '_undistorted_crop')
     
-    in_dir = args.input_dir if not args.input_dir.endswith('/') else args.input_dir[:-1]
+    in_dir = cfg.input_dir if not cfg.input_dir.endswith('/') else cfg.input_dir[:-1]
     output_dir = in_dir + output_suffix
     print(f"Output directory: {output_dir}")
     
     # Process images
-    process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir, args.crop, intrinsics)
+    process_images(rgb_files, depth_files, camera_matrix, dist_coeffs, output_dir, crop, intrinsics)
     
-    if args.crop:
+    # Always save intrinsics to output directory
+    if crop:
+        # If cropping was applied, we need to get the updated camera matrix
+        # Process the first RGB image to get the updated camera matrix
+        if rgb_files:
+            first_rgb = cv2.imread(rgb_files[0], cv2.IMREAD_COLOR)
+            if first_rgb is not None:
+                _, new_camera_matrix, roi = undistort_rgb_image(first_rgb, camera_matrix, dist_coeffs)
+                updated_camera_matrix = update_intrinsics_for_crop(new_camera_matrix, roi)
+                intrinsics_file = save_intrinsics(updated_camera_matrix, output_dir)
+                print(f"\n✓ Camera intrinsics (cropped) saved to: {intrinsics_file}")
+        elif depth_files:
+            first_depth = cv2.imread(depth_files[0], cv2.IMREAD_UNCHANGED)  
+            if first_depth is not None:
+                _, new_camera_matrix, roi = undistort_depth_image(first_depth, camera_matrix, dist_coeffs)
+                updated_camera_matrix = update_intrinsics_for_crop(new_camera_matrix, roi)
+                intrinsics_file = save_intrinsics(updated_camera_matrix, output_dir)
+                print(f"\n✓ Camera intrinsics (cropped) saved to: {intrinsics_file}")
+    else:
+        # No cropping, save the undistorted camera matrix
+        if rgb_files:
+            first_rgb = cv2.imread(rgb_files[0], cv2.IMREAD_COLOR)
+            if first_rgb is not None:
+                _, new_camera_matrix, _ = undistort_rgb_image(first_rgb, camera_matrix, dist_coeffs)
+                intrinsics_file = save_intrinsics(new_camera_matrix, output_dir)
+                print(f"\n✓ Camera intrinsics (undistorted) saved to: {intrinsics_file}")
+        elif depth_files:
+            first_depth = cv2.imread(depth_files[0], cv2.IMREAD_UNCHANGED)
+            if first_depth is not None:
+                _, new_camera_matrix, _ = undistort_depth_image(first_depth, camera_matrix, dist_coeffs)
+                intrinsics_file = save_intrinsics(new_camera_matrix, output_dir)
+                print(f"\n✓ Camera intrinsics (undistorted) saved to: {intrinsics_file}")
+    
+    if crop:
         print(f"Undistortion and cropping complete! Processed images saved to: {output_dir}")
     else:
         print(f"Undistortion complete! Processed images saved to: {output_dir}")
+    
+    
 
 
 if __name__ == "__main__":

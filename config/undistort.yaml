@@ -1,0 +1,9 @@
+defaults:
+  - paths: default
+
+recording: ???
+input_dir: ${paths.data_dir}zed/${recording}/images
+undistort: false # also crops the images by default
+config_file: ${paths.data_dir}/SN35693142.conf
+camera: "left"
+resolution: "HD"
