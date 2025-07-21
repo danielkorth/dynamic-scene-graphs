@@ -13,8 +13,8 @@ mask_images_output_folder: ${paths.data_dir}/zed/${recording}/mask_images
 temp_folder: ${paths.output_dir}/temp_frames
 
 # Frame Processing
-stride: 1  # Select every Nth frame (default: 1)
-max_frames: 0  # Max frames to process, 0=no limit (default: 0)
+stride: 5  # Select every Nth frame (default: 1)
+max_frames: 100  # Max frames to process, 0=no limit (default: 0)
 
 # SAM2 Model Configuration
 device: "auto"  # "cuda", "cpu", or "auto" (default: "auto")
