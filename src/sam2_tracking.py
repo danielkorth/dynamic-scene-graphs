@@ -4,6 +4,7 @@ import glob
 import shutil
 import numpy as np
 import torch
+import cv2
 import hydra
 from omegaconf import DictConfig
 from PIL import Image
@@ -64,7 +65,7 @@ def main(cfg: DictConfig) -> None:
         # Step 1: Frame Discovery and Processing
         print("\nStep 1: Discovering and processing frames...")
         try:
-            process_frames(source_images_dir, temp_frames_dir, cfg.stride, cfg.max_frames, cfg.jpeg_quality)
+            frame_mapping = process_frames(source_images_dir, temp_frames_dir, cfg.stride, cfg.max_frames, cfg.jpeg_quality)
         except Exception as e:
             raise RuntimeError(f"Frame processing failed: {e}")
         
@@ -79,7 +80,7 @@ def main(cfg: DictConfig) -> None:
         # Step 3: SAM2 Processing
         print("\nStep 3: Running SAM2 segmentation...")
         try:
-            run_sam2_segmentation(predictor, temp_frames_dir, cfg.masks_output_folder, cfg.mask_images_output_folder, device)
+            run_sam2_segmentation(predictor, temp_frames_dir, cfg.masks_output_folder, cfg.mask_images_output_folder, device, frame_mapping)
         except Exception as e:
             raise RuntimeError(f"SAM2 segmentation failed: {e}")
         
@@ -101,10 +102,13 @@ def main(cfg: DictConfig) -> None:
                 print(f"Warning: Failed to cleanup temporary files: {e}")
 
 
-def process_frames(source_images_dir: str, output_dir: str, stride: int, max_frames: int, jpeg_quality: int) -> None:
+def process_frames(source_images_dir: str, output_dir: str, stride: int, max_frames: int, jpeg_quality: int) -> dict:
     """
     Discover PNG files, apply filtering, and convert to sequential JPEG format.
     Equivalent to the bash script + select_and_convert_frames.py functionality.
+    
+    Returns:
+        frame_mapping: Dict mapping sequential JPEG index -> original frame number
     """
     # Discover left*.png files
     png_pattern = os.path.join(source_images_dir, "left*.png")
@@ -128,10 +132,18 @@ def process_frames(source_images_dir: str, output_dir: str, stride: int, max_fra
     if n_selected == 0:
         raise ValueError("No frames selected after filtering")
     
-    # Convert PNG to sequential JPEG
+    # Convert PNG to sequential JPEG and track original frame numbers
     print("Converting PNG files to sequential JPEG format...")
+    frame_mapping = {}
     
     for idx, png_path in enumerate(tqdm(selected_files, desc="Converting")):
+        # Extract original frame number from PNG filename (e.g., "left000023.png" -> 23)
+        png_filename = os.path.basename(png_path)
+        original_frame_num = int(png_filename.replace('left', '').replace('.png', ''))
+        
+        # Store mapping: sequential index -> original frame number
+        frame_mapping[idx] = original_frame_num
+        
         # Create sequential JPEG filename (5-digit zero-padded)
         # Use simple sequential numbering (0, 1, 2, ...) for SAM2 compatibility
         jpeg_filename = f"{idx:05d}.jpg"
@@ -143,6 +155,9 @@ def process_frames(source_images_dir: str, output_dir: str, stride: int, max_fra
             rgb_img.save(jpeg_path, 'JPEG', quality=jpeg_quality)
     
     print(f"Converted {n_selected} frames to JPEG format in {output_dir}")
+    print(f"Frame mapping: Sequential -> Original: {dict(list(frame_mapping.items())[:5])}{'...' if len(frame_mapping) > 5 else ''}")
+    
+    return frame_mapping
 
 
 def load_sam2_model(checkpoint_path: str, config_path: str, device: str):
@@ -164,7 +179,7 @@ def load_sam2_model(checkpoint_path: str, config_path: str, device: str):
     return predictor
 
 
-def run_sam2_segmentation(predictor, frames_dir: str, masks_output_dir: str, visualizations_output_dir: str, device: str) -> None:
+def run_sam2_segmentation(predictor, frames_dir: str, masks_output_dir: str, visualizations_output_dir: str, device: str, frame_mapping: dict) -> None:
     """
     Run SAM2 segmentation pipeline on processed frames.
     Equivalent to sam2_multitrack.py functionality.
@@ -180,9 +195,16 @@ def run_sam2_segmentation(predictor, frames_dir: str, masks_output_dir: str, vis
     
     # Sort by numeric order (assumes format 00000.jpg, 00001.jpg, etc.)
     frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
-    frame_nums = [int(f.split(".")[0]) for f in frame_names]
+    
+    # Map sequential indices to original frame numbers using the frame_mapping
+    original_frame_nums = []
+    for fname in frame_names:
+        seq_idx = int(os.path.splitext(fname)[0])
+        original_frame_num = frame_mapping.get(seq_idx, seq_idx)  # fallback to seq_idx if mapping missing
+        original_frame_nums.append(original_frame_num)
     
     print(f"Found {len(frame_names)} JPEG frames for processing")
+    print(f"Frame mapping: {frame_names[:3]} -> original frames {original_frame_nums[:3]}{'...' if len(frame_names) > 3 else ''}")
     
     # Start segmentation with the first frame
     frame_idx = 0
@@ -207,7 +229,7 @@ def run_sam2_segmentation(predictor, frames_dir: str, masks_output_dir: str, vis
     plt.close("all")
     
     print("Saving segmentation results...")
-    save_sam_custom(frame_names, frame_nums, video_segments, frames_dir, masks_output_dir, visualizations_output_dir)
+    save_sam_custom(frame_names, original_frame_nums, video_segments, frames_dir, masks_output_dir, visualizations_output_dir)
     
     print("SAM2 segmentation completed successfully")
 
@@ -215,36 +237,65 @@ def run_sam2_segmentation(predictor, frames_dir: str, masks_output_dir: str, vis
 def save_sam_custom(frame_names, frame_nums, video_segments, video_folder, masks_output_dir, visualizations_output_dir):
     """
     Custom save function that writes masks and visualizations to separate directories.
-    Based on the original save_sam function but with separate output directories.
+    Uses OpenCV for fast image processing and saving.
     """
     from utils.tools import get_color_for_id
     
-    for out_frame_idx in range(0, len(frame_names)):
+    for out_frame_idx in tqdm(range(len(frame_names)), desc="Saving results"):
         frame_path = os.path.join(video_folder, frame_names[out_frame_idx])
-        frame_img = Image.open(frame_path)
-
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.set_title(f"frame {frame_nums[out_frame_idx]}")
-        ax.imshow(frame_img)
-
+        
+        # Load image with OpenCV (faster than PIL for this use case)
+        frame_bgr = cv2.imread(frame_path)
+        if frame_bgr is None:
+            print(f"Warning: Could not load frame {frame_path}")
+            continue
+            
+        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        
+        # Create overlay image for visualization
+        overlay_img = frame_rgb.copy().astype(np.float32)
+        
         for out_obj_id, out_mask in video_segments[out_frame_idx].items():
             # --- Save mask as .npy to masks directory ---
             mask_filename = f"frame{frame_nums[out_frame_idx]:04d}_obj{out_obj_id}.npy"
             mask_path = os.path.join(masks_output_dir, mask_filename)
             np.save(mask_path, out_mask)
 
-            # --- Show mask on the frame with consistent color ---
+            # --- Overlay mask on image for visualization ---
             color = get_color_for_id(out_obj_id)
+            color_rgb = np.array(color) * 255  # Convert to 0-255 range
+            
+            # Handle mask shape - ensure it's 2D and matches image dimensions
             mask = out_mask
-            h, w = mask.shape[-2:]
-            mask_image = mask.reshape(h, w, 1) * np.array([*color, 0.6]).reshape(1, 1, -1)
-            ax.imshow(mask_image)
-
-        # --- Save visualization as .png to visualizations directory ---
+            if mask.ndim == 3 and mask.shape[0] == 1:
+                # Remove singleton dimension: (1, H, W) -> (H, W)
+                mask = mask.squeeze(0)
+            elif mask.ndim == 3:
+                # Multiple channels, take any non-zero: (C, H, W) -> (H, W)
+                mask = np.any(mask, axis=0)
+            elif mask.ndim != 2:
+                print(f"Warning: Unexpected mask shape {mask.shape} for object {out_obj_id}, skipping overlay")
+                continue
+            
+            # Ensure mask matches image dimensions
+            if mask.shape != overlay_img.shape[:2]:
+                print(f"Warning: Mask shape {mask.shape} doesn't match image shape {overlay_img.shape[:2]} for object {out_obj_id}, skipping overlay")
+                continue
+            
+            # Apply colored overlay where mask is True
+            mask_bool = mask.astype(bool)
+            if np.any(mask_bool):  # Only process if mask has content
+                # Blend: 40% original + 60% mask color (same as matplotlib alpha=0.6)
+                overlay_img[mask_bool] = overlay_img[mask_bool] * 0.4 + color_rgb * 0.6
+        
+        # Convert back to uint8 and BGR for OpenCV saving
+        result_img = np.clip(overlay_img, 0, 255).astype(np.uint8)
+        result_bgr = cv2.cvtColor(result_img, cv2.COLOR_RGB2BGR)
+        
+        # Save visualization with OpenCV (much faster than matplotlib)
         vis_filename = f"frame{frame_nums[out_frame_idx]:04d}.png"
         vis_path = os.path.join(visualizations_output_dir, vis_filename)
-        plt.savefig(vis_path, bbox_inches='tight')
-        plt.close()
+        cv2.imwrite(vis_path, result_bgr)
 
 
 if __name__ == "__main__":
