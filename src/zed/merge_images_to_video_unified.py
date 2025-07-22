@@ -21,6 +21,7 @@ class VideoMergerConfig:
         self.text_color = (255, 255, 255)
         self.colorbar_ticks = 5  # number of tick marks
         self.preferred_format = None  # mp4, mov, avi, or None for auto
+        self.max_depth_mm = 3000  # maximum depth in millimeters
 
 def detect_depth_format(depth_file):
     """
@@ -68,7 +69,7 @@ def load_depth_image(depth_file, depth_format_info):
     return depth
 
 def create_colorbar(height, width, min_depth, max_depth, colormap, config, is_millimeters=False):
-    """Create a constant colorbar for 0-5000mm depth range."""
+    """Create a constant colorbar for configurable depth range."""
     # Create gradient that exactly matches depth image normalization
     # This ensures colorbar and depth images use identical color mapping
     # Gradient: 0 (top) to 255 (bottom) to match depth mapping
@@ -82,14 +83,26 @@ def create_colorbar(height, width, min_depth, max_depth, colormap, config, is_mi
     colorbar_full = np.zeros((height, width, 3), dtype=np.uint8)
     colorbar_full[:, :width//3] = colorbar
     
-    # Constant tick values for 0-5000mm range (always the same)
-    tick_values = [0, 1000, 2000, 3000, 4000, 5000]  # Every 1000mm for clarity
+    # Calculate tick values based on max depth
+    max_depth_val = config.max_depth_mm
+    if max_depth_val <= 1000:
+        step = 200  # Every 200mm for ranges up to 1m
+    elif max_depth_val <= 3000:
+        step = 500  # Every 500mm for ranges up to 3m
+    elif max_depth_val <= 5000:
+        step = 1000  # Every 1000mm for ranges up to 5m
+    else:
+        step = 2000  # Every 2000mm for larger ranges
+    
+    tick_values = list(range(0, int(max_depth_val) + 1, step))
+    if tick_values[-1] != max_depth_val:
+        tick_values.append(int(max_depth_val))
     
     # Add tick marks and labels
     for depth_value in tick_values:
-        # Calculate y position: 0mm at top (value 0), 5000mm at bottom (value 255)
-        # This matches the depth image where 0mm maps to 0, 5000mm maps to 255
-        normalized_pos = depth_value / 5000.0  # Use fixed 5000mm range
+        # Calculate y position: 0mm at top (value 0), max_depth at bottom (value 255)
+        # This matches the depth image where 0mm maps to 0, max_depth maps to 255
+        normalized_pos = depth_value / float(config.max_depth_mm)  # Use configurable range
         y = int(normalized_pos * height)
         y = max(0, min(height - 1, y))  # Clamp to valid range
         
@@ -119,13 +132,13 @@ def create_colorbar(height, width, min_depth, max_depth, colormap, config, is_mi
     
     return colorbar_full
 
-def colorize_depth_image(depth_image, min_depth, max_depth, colormap):
-    """Colorize depth image with 5-meter maximum range."""
-    # Set fixed range: 0 to 5000mm (5 meters)
-    max_display_depth = 5000.0
+def colorize_depth_image(depth_image, min_depth, max_depth, colormap, max_depth_mm=3000):
+    """Colorize depth image with configurable maximum range."""
+    # Set configurable range: 0 to max_depth_mm
+    max_display_depth = float(max_depth_mm)
     min_display_depth = 0.0
     
-    # Clip depth values to 5-meter range
+    # Clip depth values to specified range
     depth_clipped = np.clip(depth_image.astype(np.float32), min_display_depth, max_display_depth)
     
     # Normalize to 0-255 range for colormap
@@ -157,13 +170,13 @@ def get_image_files(input_dir):
     
     return rgb_files, depth_files
 
-def calculate_global_depth_range(depth_files, depth_format_info, sample_size=50):
-    """Return fixed depth range of 0-5000mm (5 meters)."""
-    print("Using fixed depth range: 0-5000mm (5 meters)")
+def calculate_global_depth_range(depth_files, depth_format_info, max_depth_mm, sample_size=50):
+    """Return fixed depth range from 0 to specified maximum."""
+    print(f"Using fixed depth range: 0-{max_depth_mm}mm ({max_depth_mm/1000:.1f} meters)")
     
     # Return fixed range instead of calculating from data
     global_min = 0.0
-    global_max = 5000.0  # 5 meters in millimeters
+    global_max = float(max_depth_mm)
     
     print(f"Fixed depth range: {global_min} - {global_max}mm")
     return global_min, global_max
@@ -255,7 +268,7 @@ def create_unified_video(input_dir, output_video_path, config=None):
     
     # Calculate global depth range
     global_min_depth, global_max_depth = calculate_global_depth_range(
-        depth_files, depth_format_info)
+        depth_files, depth_format_info, config.max_depth_mm)
     
     # Create temporary directory for frames
     total_width = width * 2 + config.colorbar_width
@@ -275,28 +288,29 @@ def create_unified_video(input_dir, output_video_path, config=None):
                 print(f"Error reading frame {i+1}, skipping...")
                 continue
             
-            # Colorize depth with 5-meter clipping
+            # Colorize depth with configurable clipping
             colored_depth = colorize_depth_image(
-                depth_img, global_min_depth, global_max_depth, config.colormap)
+                depth_img, global_min_depth, global_max_depth, config.colormap, config.max_depth_mm)
             
-            # Create colorbar for fixed 0-5m range
+            # Create colorbar for configurable range
             colorbar = create_colorbar(
                 height, config.colorbar_width, global_min_depth, global_max_depth, 
                 config.colormap, config, True)  # Always use millimeter formatting
             
-            # Create three-panel layout: RGB | Depth (0-5m) | Colorbar
+            # Create three-panel layout: RGB | Depth | Colorbar
             combined = np.zeros((height, total_width, 3), dtype=np.uint8)
             combined[:, :width] = rgb_img
             combined[:, width:2*width] = colored_depth
             combined[:, 2*width:] = colorbar
             
-            # Add labels
+            # Add labels with dynamic range
+            max_depth_meters = config.max_depth_mm / 1000.0
             add_text_with_background(combined, "RGB", (10, 30), config)
-            add_text_with_background(combined, "Depth (0-5m)", (width + 10, 30), config)
+            add_text_with_background(combined, f"Depth (0-{max_depth_meters:.1f}m)", (width + 10, 30), config)
             add_text_with_background(combined, f"Frame: {i+1:04d}", (10, height - 25), config)
             
             # Add depth info
-            depth_info = f"Range: 0-5000mm"
+            depth_info = f"Range: 0-{config.max_depth_mm}mm"
             add_text_with_background(combined, depth_info, (width + 10, height - 25), config)
             
             # Save frame as PNG
@@ -326,6 +340,8 @@ def main():
     parser.add_argument('--fps', type=int, default=30, help='Video frame rate')
     parser.add_argument('--colorbar-width', type=int, default=140, 
                        help='Colorbar width in pixels')
+    parser.add_argument('--max-depth', type=int, default=3000, 
+                       help='Maximum depth in millimeters (default: 3000mm = 3m)')
     parser.add_argument('--format', choices=['mp4', 'mov', 'avi'], 
                        help='Preferred video format (mp4, mov, or avi). Will try fallback formats if preferred fails.')
     
@@ -339,6 +355,7 @@ def main():
     config = VideoMergerConfig()
     config.fps = args.fps
     config.colorbar_width = args.colorbar_width
+    config.max_depth_mm = args.max_depth
     config.preferred_format = args.format
     
     # Create video

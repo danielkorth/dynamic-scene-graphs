@@ -18,8 +18,8 @@ def main(cfg: DictConfig):
     # set up rerun env
     if cfg.headless:
         # ensure that a rerun server is running (rerun --serve)
-        # rr.init("living_room", spawn=False, default_blueprint=setup_blueprint())
-        # rr.connect_grpc()
+        rr.init("living_room", spawn=False, default_blueprint=setup_blueprint())
+        rr.connect_grpc()
         pass
     else:
         rr.init("living_room", spawn=True, default_blueprint=setup_blueprint())
