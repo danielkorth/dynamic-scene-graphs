@@ -7,7 +7,7 @@ recording: ???
 source_folder: ${paths.data_dir}zed/${recording}
 images_folder: ${paths.data_dir}zed/${recording}/images_undistorted_crop
 intrinsics_file: ${images_folder}/intrinsics.txt
-masks_output_folder: ${paths.data_dir}/zed/${recording}/masks
+masks_output_folder: ${paths.data_dir}/zed/${recording}/masks_${stride}_${max_frames}
 
 # Frame Processing
 stride: 5  # Select every Nth frame (default: 1)

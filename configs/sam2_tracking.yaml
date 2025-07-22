@@ -8,8 +8,8 @@ recording: ???
 
 # Input/Output Paths  
 source_folder: ${paths.data_dir}zed/${recording}/images_undistorted_crop
-masks_output_folder: ${paths.data_dir}/zed/${recording}/masks
-mask_images_output_folder: ${paths.data_dir}/zed/${recording}/mask_images
+masks_output_folder: ${paths.data_dir}/zed/${recording}/masks_${stride}_${max_frames}
+mask_images_output_folder: ${paths.data_dir}/zed/${recording}/mask_images_${stride}_${max_frames} 
 temp_folder: ${paths.output_dir}/temp_frames
 
 # Frame Processing
