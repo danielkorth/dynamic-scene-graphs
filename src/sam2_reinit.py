@@ -1,6 +1,8 @@
-from utils.sam2_utils import (create_overlapping_subsets, detect_with_furthest, mask_first_frame, 
-                                save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations)
+from utils.sam2_utils import (create_overlapping_subsets, detect_with_furthest, is_new_obj, mask_first_frame, 
+                                save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations, detect_with_cc, get_mask_from_points)
 from sam2.build_sam import build_sam2_video_predictor
+from sam2.sam2_image_predictor import SAM2ImagePredictor
+from segment import SAM2Segmenter
 import hydra
 import os
 from PIL import Image
@@ -19,14 +21,15 @@ def main(cfg):
         device = "cuda"
     )
 
-    segmenter = hydra.utils.instantiate(cfg.sam)
+    auto_segmenter = hydra.utils.instantiate(cfg.sam)
+    img_segmenter = SAM2ImagePredictor(auto_segmenter.sam2)
 
     # load first image
     first_image_path = subsets[0] + "/000000.jpg"
     img = Image.open(first_image_path)
     img_np = np.array(img)
     
-    masks = mask_first_frame(img_np, segmenter, viz=True)
+    masks = mask_first_frame(img_np, auto_segmenter, viz=True)
 
     # inital points and labels 
     # dict: obj_id -> points, labels
@@ -92,12 +95,25 @@ def main(cfg):
 
         # Detect new regions
         new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
-        # add new categories
-        next_obj_id = len(obj_points)
-        for j, new_region in enumerate(new_regions):
-            new_obj_id = next_obj_id + j
-            obj_points[new_obj_id]['points'] = new_region['points'].astype(np.float32).reshape(-1, 2)
-            obj_points[new_obj_id]['labels'] = new_region['labels']
+        if len(new_regions) > 0:
+            if cfg.prompt_with_masks:
+                last_img_patch_path = subsets[i] + f"/{len(video_segments)-1:06d}.jpg"
+                img_last_patch = Image.open(last_img_patch_path)
+                img_last_patch_np = np.array(img_last_patch)
+                all_points = np.vstack([new_regions[i]['points'] for i in range(len(new_regions))])
+                valids_idx = get_mask_from_points(all_points, img_segmenter, img_last_patch_np, iou_threshold=0.5)
+                new_regions = [new_regions[i] for i in valids_idx]
+
+            # add new categories
+            next_obj_id = max(obj_points.keys()) + 1
+            for j, new_region in enumerate(new_regions):
+                if new_region['mask'] is None or is_new_obj(new_region['mask'], obj_points, iou_threshold=0.5):
+                    new_obj_id = next_obj_id + j
+                    obj_points[new_obj_id]['points'] = new_region['points'].astype(np.float32).reshape(-1, 2)
+                    obj_points[new_obj_id]['labels'] = new_region['labels']
+                    obj_points[new_obj_id]['mask'] = new_region['mask']
+                else:
+                    print(f"New region {j} is not new")
 
         save_points_image_cv2_obj_id(os.path.join(subsets[i], f"{len(video_segments)-1:06d}.jpg"), obj_points, os.path.join(cfg.output_folder, f"frame_{i}_obj_id_new.png"))
 

@@ -1,21 +1,24 @@
 defaults:
   - paths: default
   - sam: tiny
-  - new_objects_fct: farthest_point
+  - new_objects_fct: farthest_point 
   - _self_
 
 # needs to be provided
 recording: office1
 
 # Input/Output Paths  
-source_folder: ${paths.data_dir}zed/${recording}/images_undistorted_crop
+source_folder: ${paths.data_dir}zed/${recording}/images_minimal
 masks_output_folder: ${paths.data_dir}/zed/${recording}/masks_${stride}_${max_frames}
 mask_images_output_folder: ${paths.data_dir}/zed/${recording}/mask_images_${stride}_${max_frames} 
 output_folder: ${paths.output_dir}
 
 # Frame configs
-subsample: 10 # subsample factor on original frames
-chunk_size: 10 # chunk size of overlapping subsets
+subsample: 4 # subsample factor on original frames
+chunk_size: 5 # chunk size of overlapping subsets
 overlap: 1 # overlap between chunks
+
+# Prompt with masks
+prompt_with_masks: false
 
 viz: false # visualize the first segmentation

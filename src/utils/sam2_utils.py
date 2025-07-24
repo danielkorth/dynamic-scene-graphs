@@ -123,41 +123,6 @@ def mask_first_frame(first_frame: np.ndarray, segmenter: SAM2Segmenter, viz: boo
 
     return masks
 
-def sample_points_per_cc(
-        comp_mask: np.ndarray,
-        area_per_sample: int = 100,
-        max_samples: int = 20,
-        min_area: int = 20
-    ) -> np.ndarray:
-    """
-    For each connected component in comp_mask:
-      - If its area < min_area: skip it.
-      - Otherwise, sample `ceil(area / area_per_sample)` points,
-        but at most max_samples, at least 1.
-    Returns an (N,2) array of (row, col) coords.
-    """
-    labels = label(comp_mask, connectivity=1)
-    points = []
-
-    for region in regionprops(labels):
-        area = region.area
-        if area < min_area:
-            # too small to consider
-            continue
-
-        # decide how many points to sample
-        num = math.ceil(area / area_per_sample)
-        num = max(1, min(num, max_samples))
-
-        coords = region.coords  # (row, col) pairs
-        # randomly choose without replacement
-        chosen = coords[np.random.choice(len(coords), num, replace=False)]
-        points.append(chosen)
-
-    if not points:
-        return np.zeros((0, 2), dtype=int)
-    return np.vstack(points)
-
 def refine_masks_with_complement(
         img_predictor,
         img: np.ndarray,
@@ -471,9 +436,180 @@ def detect_with_furthest(full_mask, buffer_radius, n_samples):
     for i in range(len(sampled_points)):
         return_list.append({
             'points': sampled_points[i],
-            'labels': np.ones(1, dtype=np.int32)
+            'labels': np.ones(1, dtype=np.int32),
+            'mask': None
         })
     return return_list
+
+
+def sample_points_per_cc(
+        comp_mask: np.ndarray,
+        area_per_sample: int = 100,
+        max_samples: int = 20,
+        min_area: int = 20,
+        viz: bool = False
+    ) -> np.ndarray:
+    """
+    For each connected component in comp_mask:
+      - If its area < min_area: skip it.
+      - Otherwise, sample `ceil(area / area_per_sample)` points,
+        but at most max_samples, at least 1.
+    Returns an (N,2) array of (row, col) coords.
+    If viz is True, shows a 3-panel visualization:
+      - Left: comp_mask (binary)
+      - Center: connected components colored
+      - Right: sampled points overlaid on comp_mask
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
+    import numpy as np
+
+    labels = label(comp_mask, connectivity=1)
+    points = []
+
+    for region in regionprops(labels):
+        area = region.area
+        if area < min_area:
+            # too small to consider
+            continue
+
+        # decide how many points to sample
+        num = math.ceil(area / area_per_sample)
+        num = max(1, min(num, max_samples))
+
+        coords = region.coords  # (row, col) pairs
+        # randomly choose without replacement
+        chosen = coords[np.random.choice(len(coords), num, replace=False)]
+        points.append(chosen)
+
+    if not points:
+        sampled_points = np.zeros((0, 2), dtype=int)
+    else:
+        sampled_points = np.vstack(points)
+
+    if viz:
+        # Prepare the 3-panel visualization
+        fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+
+        # Left: comp_mask (binary)
+        axs[0].imshow(comp_mask, cmap='gray')
+        axs[0].set_title("Complementary Mask")
+        axs[0].axis('off')
+
+        # Center: connected components colored
+        # Use a colormap for the labels, skipping 0 (background)
+        n_labels = labels.max()
+        if n_labels > 0:
+            # Use tab20 or hsv for up to 20 regions, else random colors
+            cmap = plt.get_cmap('tab20', n_labels)
+            colored_labels = np.zeros((*labels.shape, 3), dtype=np.float32)
+            for i in range(1, n_labels + 1):
+                color = cmap(i - 1)[:3]
+                colored_labels[labels == i] = color
+            axs[1].imshow(colored_labels)
+        else:
+            axs[1].imshow(labels, cmap='gray')
+        axs[1].set_title("Connected Components")
+        axs[1].axis('off')
+
+        # Right: comp_mask with sampled points
+        axs[2].imshow(comp_mask, cmap='gray')
+        if sampled_points.shape[0] > 0:
+            axs[2].scatter(sampled_points[:, 1], sampled_points[:, 0], c='red', s=20, marker='o', edgecolors='black')
+        axs[2].set_title("Sampled Points")
+        axs[2].axis('off')
+
+        plt.tight_layout()
+        plt.show()
+
+    return sampled_points[:, [1, 0]]
+
+def detect_with_cc(full_mask, **kwargs):
+    safe_mask = get_dilated_mask(np.squeeze(full_mask), buffer_radius=kwargs['buffer_radius'])
+    sampled_points = sample_points_per_cc(np.squeeze(~safe_mask), viz=False)
+
+    # Create the return list of dicts
+    return_list = []
+    for i in range(len(sampled_points)):
+        return_list.append({
+            'points': sampled_points[i],
+            'labels': np.ones(1, dtype=np.int32),
+            'mask': None
+            })
+    return return_list
+
+def get_mask_from_points(points, img_segmenter, img_np, iou_threshold=0.5):
+    img_segmenter.set_image(img_np)
+    labels = np.ones(len(points), dtype=np.int32)
+    masks, scores, _ = img_segmenter.predict(points[:, None, :], labels[:, None],
+                                               multimask_output = False)
+    masks = masks.squeeze(1).astype(bool)
+    idx_keep = nms_masks(masks, scores.squeeze(), iou_threshold=iou_threshold)
+    return idx_keep
+
+def compute_iou(mask1, mask2):
+        intersection = np.logical_and(mask1, mask2).sum()
+        union = np.logical_or(mask1, mask2).sum() + 1e-8
+        return intersection / union
+
+def nms_masks(masks, scores=None, iou_threshold=0.5):
+    """
+    Perform Non-Maximum Suppression (NMS) on a list of masks.
+    Args:
+        masks: list or array of HxW boolean numpy arrays (masks)
+        scores: (optional) list or array of floats, quality score for each mask
+        iou_threshold: float, IoU threshold for suppression
+    Returns:
+        keep_indices: list of indices of masks to keep after NMS
+    """
+    import numpy as np
+    
+    if len(masks) == 0:
+        return []
+    
+    masks = [np.asarray(m).astype(bool) for m in masks]
+    N = len(masks)
+    if scores is not None:
+        order = np.argsort(scores)[::-1]
+    else:
+        order = np.arange(N)
+    keep = []
+    suppressed = np.zeros(N, dtype=bool)
+
+    for i in order:
+        if suppressed[i]:
+            continue
+        keep.append(i)
+        for j in order:
+            if i == j or suppressed[j]:
+                continue
+            iou = compute_iou(masks[i], masks[j])
+            if iou > iou_threshold:
+                suppressed[j] = True
+    return keep
+
+def is_new_obj(new_mask, obj_points, iou_threshold=0.5):
+    """
+    Check if a new mask should be added to obj_points based on IoU overlap.
+    Args:
+        new_mask: HxW boolean numpy array
+        obj_points: dict mapping obj_id to dict with at least a 'mask' key (HxW boolean array)
+        iou_threshold: float, if IoU with any existing mask exceeds this, do not add
+    Returns:
+        True if the new mask should be added, False otherwise
+    """
+    new_mask = np.asarray(new_mask).astype(bool)
+    for obj in obj_points.values():
+        existing_mask = obj.get('mask', None)
+        if existing_mask is None:
+            continue
+        existing_mask = np.asarray(existing_mask).astype(bool)
+        intersection = np.logical_and(new_mask, existing_mask).sum()
+        union = np.logical_or(new_mask, existing_mask).sum() + 1e-8
+        iou = intersection / union
+        if iou > iou_threshold:
+            return False
+    return True
 
 # Save results using OpenCV for speed
 def save_sam_cv2(video_segments, frames_dir, masks_dir, vis_dir):
