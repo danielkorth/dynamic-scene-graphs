@@ -2,7 +2,6 @@ defaults:
   - paths: default
   - sam: tiny
   - new_objects_fct: farthest_point 
-  # - new_objects_fct: sampling_cc
   - _self_
 
 # needs to be provided
