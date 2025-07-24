@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 # SAM2 imports
 from sam2.build_sam import build_sam2_video_predictor
 from utils.sam2_utils import (mask_first_frame_interactive, save_sam, 
-                              propagate_video_plain)
+                              propagate_video_plain, mask_first_frame)
+from segment import SAM2Segmenter
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="sam2_tracking")
@@ -80,7 +81,8 @@ def main(cfg: DictConfig) -> None:
         # Step 3: SAM2 Processing
         print("\nStep 3: Running SAM2 segmentation...")
         try:
-            run_sam2_segmentation(predictor, temp_frames_dir, cfg.masks_output_folder, cfg.mask_images_output_folder, device, frame_mapping)
+            segmenter = SAM2Segmenter(sam2_checkpoint = cfg.sam.sam2_checkpoint, model_cfg = cfg.sam.model_config)
+            run_sam2_segmentation(predictor, temp_frames_dir, cfg.masks_output_folder, cfg.mask_images_output_folder, device, frame_mapping, segmenter=segmenter)
         except Exception as e:
             raise RuntimeError(f"SAM2 segmentation failed: {e}")
         
@@ -179,7 +181,7 @@ def load_sam2_model(checkpoint_path: str, config_path: str, device: str):
     return predictor
 
 
-def run_sam2_segmentation(predictor, frames_dir: str, masks_output_dir: str, visualizations_output_dir: str, device: str, frame_mapping: dict) -> None:
+def run_sam2_segmentation(predictor, frames_dir: str, masks_output_dir: str, visualizations_output_dir: str, device: str, frame_mapping: dict, segmenter: SAM2Segmenter) -> None:
     """
     Run SAM2 segmentation pipeline on processed frames.
     Equivalent to sam2_multitrack.py functionality.
@@ -211,11 +213,12 @@ def run_sam2_segmentation(predictor, frames_dir: str, masks_output_dir: str, vis
     ann_frame_idx = frame_idx
     
     print("Running interactive first frame masking...")
-    predictor, inference_state = mask_first_frame_interactive(
+    predictor, inference_state = mask_first_frame(
         predictor, 
         video_path=frames_dir, 
         frame_idx=ann_frame_idx, 
-        viz=True
+        viz=True,
+        segmenter=segmenter
     )
     
     print("Propagating segmentation across video...")

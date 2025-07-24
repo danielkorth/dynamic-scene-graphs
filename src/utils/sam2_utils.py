@@ -182,7 +182,8 @@ def mask_first_frame_multi(predictor,
 def mask_first_frame(predictor,
                     video_path: str,
                     frame_idx: int = 0,
-                    viz = False
+                    viz = False,
+                    segmenter = None
                     ) :
     """
     Automatically generate masks on the first frame and initialize tracking.
@@ -209,10 +210,10 @@ def mask_first_frame(predictor,
 
     # 1) Automatic mask generation
     # predictor.generate_auto_masks should return masks as [N, H, W] boolean or logits
-    segmenter = SAM2Segmenter(
-        sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt",
-        model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
-    )
+    # segmenter = SAM2Segmenter(
+    #     sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt",
+    #     model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
+    # )
     masks = segmenter.segment(img_np)
 
     union, coverage = mask_union_and_coverage(masks)
@@ -251,11 +252,11 @@ def mask_first_frame(predictor,
 
 
 def sample_points_per_cc(
-    comp_mask: np.ndarray,
-    area_per_sample: int = 100,
-    max_samples: int = 20,
-    min_area: int = 20
-) -> np.ndarray:
+        comp_mask: np.ndarray,
+        area_per_sample: int = 100,
+        max_samples: int = 20,
+        min_area: int = 20
+    ) -> np.ndarray:
     """
     For each connected component in comp_mask:
       - If its area < min_area: skip it.
@@ -286,12 +287,12 @@ def sample_points_per_cc(
     return np.vstack(points)
 
 def refine_masks_with_complement(
-    img_predictor,
-    img: np.ndarray,
-    masks: list[dict],
-    min_iou_new: float = 0.1,
-    new_only : bool = False
-):
+        img_predictor,
+        img: np.ndarray,
+        masks: list[dict],
+        min_iou_new: float = 0.1,
+        new_only : bool = False
+    ):
     """
     Given an initial set of masks, compute how much of the image they cover;
     if below threshold, extract the complementary region and ask SAM2 to
