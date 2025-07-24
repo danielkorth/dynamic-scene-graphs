@@ -1,3 +1,5 @@
+import re
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -5,6 +7,7 @@ from PIL import Image
 import math
 from skimage.measure import label, regionprops
 import random
+import glob
 
 from sam2.build_sam import build_sam2_video_predictor, build_sam2_camera_predictor
 from segment import SAM2Segmenter
@@ -107,149 +110,23 @@ def mask_first_frame_interactive(predictor, video_path, frame_idx = 0, viz=False
 
     return predictor, inference_state
 
-def mask_first_frame_multi(predictor,
-                    video_path: str,
-                    frame_idx: int = 0,
-                    viz = False
-                    ) :
-    """
-    Automatically generate masks on the first frame and initialize tracking.
 
-    Args:
-        predictor: SAM2 predictor with auto-mask capability.
-        video_path: Path to folder of frames named "%05d.jpg".
-        frame_idx: Index of the frame to mask.
-        iou_threshold: Minimum IoU to merge overlapping masks.
-        point_sampling_method: How to sample a point from each mask ("centroid" or "random").
-    Returns:
-        predictor: Reset predictor ready for tracking.
-        inference_state: Initialized inference state with object prompts added.
-    """
-    # Load image
-    image_files = sorted([
-        f for f in os.listdir(video_path)
-        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
-    ])
-    img_path = os.path.join(video_path, image_files[frame_idx])
-    img_pil = Image.open(img_path).convert("RGB")
-    img_np = np.array(img_pil)
-    coverage_threshold = 0.0
+def mask_first_frame(first_frame: np.ndarray, segmenter: SAM2Segmenter, viz: bool = False):
+    masks = segmenter.segment(first_frame)
+    print(f"Found {len(masks)} masks")
 
-    # 1) Automatic mask generation
-    # predictor.generate_auto_masks should return masks as [N, H, W] boolean or logits
-    segmenter = SAM2Segmenter(
-        sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt",
-        model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
-    )
-    masks = segmenter.segment(img_np)
-
-    union, coverage = mask_union_and_coverage(masks)
-    if coverage < coverage_threshold:
-        masks = refine_masks_with_complement(segmenter.mask_generator.predictor, img_np, union, masks)
-    print(f"Image coverage was {coverage:.1%}; now have {len(masks)} masks.")
-
+    # plt imshow the image + masks
     if viz:
-        # 1.5) Visualization
         fig, ax = plt.subplots()
-        ax.imshow(img_np)
+        ax.imshow(first_frame)
         for i, mask in enumerate(masks):
-            show_mask(mask['segmentation'], ax, obj_id=i, random_color=True)
+            show_mask(mask['segmentation'], ax, obj_id=i, random_color=False)
         ax.axis('off')
-        ax.set_title(f"Masks overlaid on frame {frame_idx}")
+        ax.set_title(f"Masks overlaid on frame {0}")
         plt.tight_layout()
         plt.show()
 
-    # 2) Initialize inference state
-    predictor.load_first_frame(img_np)
-
-    # 3) For each mask, compute a representative point and feed as prompt
-    for obj_id, mask in enumerate(masks):
-
-        points = mask['point_coords']
-        labels = np.ones(len(points), dtype=np.int32)
-
-        # Add to predictor state
-        _, out_obj_ids, out_mask_logits = predictor.add_new_points(
-            cond_state_idx=len(predictor.condition_states)-1,
-            frame_idx=frame_idx,
-            obj_id=obj_id,
-            points=points,
-            labels=labels,
-        )
-
-    return predictor, None
-
-def mask_first_frame(predictor,
-                    video_path: str,
-                    frame_idx: int = 0,
-                    viz = False,
-                    segmenter = None
-                    ) :
-    """
-    Automatically generate masks on the first frame and initialize tracking.
-
-    Args:
-        predictor: SAM2 predictor with auto-mask capability.
-        video_path: Path to folder of frames named "%05d.jpg".
-        frame_idx: Index of the frame to mask.
-        iou_threshold: Minimum IoU to merge overlapping masks.
-        point_sampling_method: How to sample a point from each mask ("centroid" or "random").
-    Returns:
-        predictor: Reset predictor ready for tracking.
-        inference_state: Initialized inference state with object prompts added.
-    """
-    # Load image
-    image_files = sorted([
-        f for f in os.listdir(video_path)
-        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
-    ])
-    img_path = os.path.join(video_path, image_files[frame_idx])
-    img_pil = Image.open(img_path).convert("RGB")
-    img_np = np.array(img_pil)
-    coverage_threshold = 0.0
-
-    # 1) Automatic mask generation
-    # predictor.generate_auto_masks should return masks as [N, H, W] boolean or logits
-    # segmenter = SAM2Segmenter(
-    #     sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt",
-    #     model_cfg = "./configs/sam2.1/sam2.1_hiera_l.yaml" 
-    # )
-    masks = segmenter.segment(img_np)
-
-    union, coverage = mask_union_and_coverage(masks)
-    if coverage < coverage_threshold:
-        masks = refine_masks_with_complement(segmenter.mask_generator.predictor, img_np, union, masks)
-    print(f"Image coverage was {coverage:.1%}; now have {len(masks)} masks.")
-
-    if viz:
-        # 1.5) Visualization
-        fig, ax = plt.subplots()
-        ax.imshow(img_np)
-        for i, mask in enumerate(masks):
-            show_mask(mask['segmentation'], ax, obj_id=i, random_color=True)
-        ax.axis('off')
-        ax.set_title(f"Masks overlaid on frame {frame_idx}")
-        plt.tight_layout()
-        plt.show()
-
-
-    inference_state = predictor.init_state(video_path=video_path)
-    predictor.reset_state(inference_state)
-    prompts = {}
-    for obj_id, mask in enumerate(masks):
-        points = mask['point_coords']
-        labels = np.ones(len(points), dtype=np.int32)
-
-        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-            inference_state=inference_state,
-            frame_idx=frame_idx,
-            obj_id=obj_id,
-            points=points,
-            labels=labels,
-        )
-
-    return predictor, inference_state
-
+    return masks
 
 def sample_points_per_cc(
         comp_mask: np.ndarray,
@@ -409,190 +286,6 @@ def refine_masks_with_complement(
 
     return out
 
-def propagate_video_plain(predictor, inference_state, video_path):
-    video_segments = {}  # video_segments contains the per-frame segmentation results
-    img_names = os.listdir(video_path)
-    img_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
-
-    for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
-        frame_masks = []
-        video_segments[out_frame_idx] = {}
-        last_idx = out_obj_ids[-1]
-
-        for i, out_obj_id in enumerate(out_obj_ids):
-            mask = (out_mask_logits[i] > 0.0).cpu().numpy()
-            frame_masks.append({"segmentation": mask})
-            video_segments[out_frame_idx].update({out_obj_id: mask})
-            
-    return predictor, video_segments
-
-def propagate_video(predictor, inference_state, video_path, viz = False):
-    video_segments = {}  # video_segments contains the per-frame segmentation results
-    predictors = [predictor]
-    coverage_threshold = 0.6
-    single_frame_seg = SAM2Segmenter(
-        sam2_checkpoint = "checkpoints/sam2.1_hiera_tiny.pt",
-        model_cfg = "./configs/sam2.1/sam2.1_hiera_t.yaml" 
-    )
-    img_names = os.listdir(video_path)
-    img_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
-
-    for frame_idx in tqdm(range(len(img_names)), desc="propagate in video"):
-        frame_masks = []
-        video_segments[frame_idx] = {}
-
-        img_pil = Image.open(os.path.join(video_path, f"{img_names[frame_idx]:05}")).convert("RGB")
-        img_np = np.array(img_pil)
-
-        last_predictor_id = 0
-        for pred_idx, pred in enumerate(predictors):
-            out_obj_ids, out_mask_logits = pred.track(img_np)
-            last_idx = out_obj_ids[-1]
-
-            for i, out_obj_id in enumerate(out_obj_ids):
-                mask = (out_mask_logits[i] > 0.0).cpu().numpy()
-                frame_masks.append({"segmentation": mask})
-                video_segments[frame_idx].update({last_predictor_id + out_obj_id: mask})
-
-            last_predictor_id = last_idx
-        
-        if viz:
-            # 1.5) Visualization
-            fig, ax = plt.subplots()
-            ax.imshow(img_np)
-            for i, mask in enumerate(frame_masks):
-                show_mask(mask['segmentation'], ax, obj_id=i, random_color=False)
-            ax.axis('off')
-            ax.set_title(f"Masks overlaid on frame {frame_idx}")
-            plt.tight_layout()
-            plt.show()
-
-        sam2_checkpoint = "checkpoints/sam2.1_hiera_tiny.pt"
-        model_cfg = "./configs/sam2.1/sam2.1_hiera_t.yaml"
-        new_p = build_sam2_camera_predictor(model_cfg, sam2_checkpoint, device=predictors[0].device)
-        new_p.load_first_frame(img_np)
-
-        masks = refine_masks_with_complement(single_frame_seg.mask_generator.predictor, img_np, frame_masks, new_only=True)
-        # Add to predictor state
-        for new_idx, new_mask in enumerate(masks):
-            points = new_mask['point_coords']
-            labels = np.ones(len(points), dtype=np.int32)
-
-            # Add to predictor state
-            _, out_obj_ids, out_mask_logits = new_p.add_new_points(
-                frame_idx=0,
-                obj_id=new_idx,
-                points=points,
-                labels=labels,
-            ) 
-
-            predictors.append(new_p)     
-            
-    return predictor, video_segments
-
-def propagate_video_multi(predictor, inference_state, video_path, viz = False):
-    video_segments = {}  # video_segments contains the per-frame segmentation results
-    predictors = [predictor]
-    coverage_threshold = 0.6
-    single_frame_seg = SAM2Segmenter(
-        sam2_checkpoint = "checkpoints/sam2.1_hiera_tiny.pt",
-        model_cfg = "./configs/sam2.1/sam2.1_hiera_t.yaml" 
-    )
-    img_names = os.listdir(video_path)
-    img_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
-
-    for frame_idx in tqdm(range(len(img_names)), desc="propagate in video"):
-        frame_masks = []
-        video_segments[frame_idx] = {}
-
-        img_pil = Image.open(os.path.join(video_path, f"{img_names[frame_idx]:05}")).convert("RGB")
-        img_np = np.array(img_pil)
-
-        last_predictor_id = 0
-        for pred_idx, pred in enumerate(predictors):
-            out_obj_ids, out_mask_logits = pred.track(img_np)
-            last_idx = out_obj_ids[-1]
-
-            for i, out_obj_id in enumerate(out_obj_ids):
-                mask = (out_mask_logits[i] > 0.0).cpu().numpy()
-                frame_masks.append({"segmentation": mask})
-                video_segments[frame_idx].update({last_predictor_id + out_obj_id: mask})
-
-            last_predictor_id = last_idx
-        
-        if viz:
-            # 1.5) Visualization
-            fig, ax = plt.subplots()
-            ax.imshow(img_np)
-            for i, mask in enumerate(frame_masks):
-                show_mask(mask['segmentation'], ax, obj_id=i, random_color=False)
-            ax.axis('off')
-            ax.set_title(f"Masks overlaid on frame {frame_idx}")
-            plt.tight_layout()
-            plt.show()
-
-        # sam2_checkpoint = "checkpoints/sam2.1_hiera_tiny.pt"
-        # model_cfg = "./configs/sam2.1/sam2.1_hiera_t.yaml"
-        # new_p = build_sam2_camera_predictor(model_cfg, sam2_checkpoint, device=predictors[0].device)
-        # new_p.load_first_frame(img_np)
-
-        pred.load_first_frame(img_np)
-        masks = refine_masks_with_complement(single_frame_seg.mask_generator.predictor, img_np, frame_masks, new_only=True)
-        # Add to predictor state
-        for new_idx, new_mask in enumerate(masks):
-            points = new_mask['point_coords']
-            labels = np.ones(len(points), dtype=np.int32)
-
-            # Add to predictor state
-            _, out_obj_ids, out_mask_logits = pred.add_new_points(
-                cond_state_idx=frame_idx+1,
-                frame_idx=0,
-                obj_id= random.randint(0, 1000),
-                points=points,
-                labels=labels,
-            ) 
-
-            # predictors.append(new_p)     
-            
-    return predictor, video_segments
-
-def save_sam(frame_names, frame_nums, video_segments, video_folder, output_dir):
-    """
-    Save SAM masks and visualizations for each frame, using the correct original frame indices.
-    frame_names: list of image filenames (sampled from the video)
-    frame_nums: list of original frame indices corresponding to frame_names
-    video_segments: dict mapping frame index (0..len(frame_names)-1) to {obj_id: mask}
-    video_folder: path to the folder with video frames
-    output_dir: base output directory for masks and visualizations
-    """
-    for out_frame_idx in range(0, len(frame_names)):
-        frame_path = os.path.join(video_folder, frame_names[out_frame_idx])
-        frame_img = Image.open(frame_path)
-
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.set_title(f"frame {frame_nums[out_frame_idx]}")
-        ax.imshow(frame_img)
-
-        for out_obj_id, out_mask in video_segments[out_frame_idx].items():
-            # --- Save mask as .npy ---
-            mask_filename = f"frame{frame_nums[out_frame_idx]:04d}_obj{out_obj_id}.npy"
-            mask_path = os.path.join(output_dir, "masks", mask_filename)
-            np.save(mask_path, out_mask)
-
-            # --- Show mask on the frame with consistent color ---
-            color = get_color_for_id(out_obj_id)
-            mask = out_mask
-            h, w = mask.shape[-2:]
-            mask_image = mask.reshape(h, w, 1) * np.array([*color, 0.6]).reshape(1, 1, -1)
-            ax.imshow(mask_image)
-
-        # --- Save visualization as .png ---
-        vis_filename = f"frame{frame_nums[out_frame_idx]:04d}.png"
-        vis_path = os.path.join(output_dir, "visualizations", vis_filename)
-        plt.savefig(vis_path, bbox_inches='tight')
-        plt.close()
-
-
 def visualize_refinement(img: np.ndarray,
                          union: np.ndarray,
                          masks: list[dict],
@@ -654,3 +347,272 @@ def visualize_refinement(img: np.ndarray,
 
     plt.tight_layout()
     plt.show()
+
+
+#####################################################################################
+# Functions V2
+#####################################################################################
+
+def create_overlapping_subsets(input_dir, output_dir, stride=5, overlap=1, subsample=1):
+    """
+    Create overlapping subsequences of left RGB images, with optional subsampling.
+    Args:
+        input_dir: Path to directory containing left*.png images
+        output_dir: Path to output directory where subset folders will be created
+        stride: Number of images per subset (default: 5)
+        overlap: Number of overlapping images between subsets (default: 1)
+        subsample: Take every Nth image (default: 1, no subsampling)
+    Returns:
+        List of subset directory paths
+    """
+    left_pattern = os.path.join(input_dir, "left*.png")
+    left_files = sorted(glob.glob(left_pattern))
+    left_files = left_files[::subsample]
+    if not left_files:
+        raise FileNotFoundError(f"No left*.png files found in {input_dir}")
+    os.makedirs(output_dir, exist_ok=True)
+    step_size = stride - overlap
+    subset_idx = 0
+    start_idx = 0
+    subset_paths = []
+    while start_idx < len(left_files):
+        end_idx = min(start_idx + stride, len(left_files))
+        subset_dir = os.path.join(output_dir, f"subset_{subset_idx}")
+        os.makedirs(subset_dir, exist_ok=True)
+        subset_paths.append(subset_dir)
+        for j, i in enumerate(range(start_idx, end_idx)):
+            input_path = left_files[i]
+            # Name images as 000000.jpg, 000001.jpg, ... within each subset
+            jpg_filename = f"{j:06d}.jpg"
+            output_path = os.path.join(subset_dir, jpg_filename)
+            with Image.open(input_path) as img:
+                if img.mode in ('RGBA', 'LA'):
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    background.paste(img, mask=img.split()[-1])
+                    img = background
+                elif img.mode not in ('RGB',):
+                    img = img.convert('RGB')
+                img.save(output_path, 'JPEG', quality=95)
+        print(f"Created {subset_dir} with {end_idx - start_idx} images (indices {start_idx}-{end_idx-1})")
+        subset_idx += 1
+        start_idx += step_size
+        if start_idx >= len(left_files):
+            break
+    return subset_paths
+
+
+# Example usage:
+# dilated_mask = get_dilated_mask(mask, buffer_radius=5)
+# Use dilated_mask as your expanded mask (True = masked/foreground, expanded)
+
+def get_dilated_mask(mask, buffer_radius):
+    """
+    Dilate the mask by buffer_radius pixels and return the dilated mask.
+    Args:
+        mask: 2D numpy array of bools (True = masked/foreground)
+        buffer_radius: int, dilation radius in pixels
+    Returns:
+        dilated_mask: 2D numpy array of bools (True = masked/foreground, expanded)
+    """
+    import numpy as np
+    from scipy.ndimage import binary_dilation
+
+    if buffer_radius <= 0:
+        return mask
+
+    y, x = np.ogrid[-buffer_radius:buffer_radius+1, -buffer_radius:buffer_radius+1]
+    selem = (x**2 + y**2) <= buffer_radius**2
+    dilated_mask = binary_dilation(mask, structure=selem)
+    return dilated_mask
+
+
+def farthest_point_sampling(mask, n_samples, border=0):
+    """
+    Perform farthest point sampling on a 2D boolean mask, avoiding points near the border.
+    Args:
+        mask: 2D numpy array of bools (True = foreground)
+        n_samples: number of points to sample
+        border: minimum distance from the image border (in pixels, default 0)
+    Returns:
+        coords: (n_samples, 2) array of sampled (col, row) coordinates
+    """
+    # Get foreground coordinates
+    coords = np.argwhere(mask)
+    if border > 0:
+        h, w = mask.shape
+        coords = coords[
+            (coords[:, 0] >= border) & (coords[:, 0] < h - border) &
+            (coords[:, 1] >= border) & (coords[:, 1] < w - border)
+        ]
+    if len(coords) == 0:
+        return np.array([])
+    if n_samples > len(coords):
+        return np.array([])
+
+    # Initialize: pick a random point
+    idx = np.random.choice(len(coords))
+    selected = [coords[idx]]
+    # Compute distances to the first point
+    dists = np.linalg.norm(coords - coords[idx], axis=1)
+
+    for _ in range(1, n_samples):
+        # Select the point with the maximum distance to the set
+        idx = np.argmax(dists)
+        selected.append(coords[idx])
+        # Update distances: for each point, keep the minimum distance to any selected point
+        dists = np.minimum(dists, np.linalg.norm(coords - coords[idx], axis=1))
+
+    selected = np.array(selected)
+    # Swap columns to return (col, row) instead of (row, col)
+    return selected[:, [1, 0]]
+
+
+def detect_with_furthest(full_mask, **kwargs):
+    safe_mask = get_dilated_mask(np.squeeze(full_mask), buffer_radius=kwargs['mask_buffer_radius'])
+    sampled_points = farthest_point_sampling(np.squeeze(~safe_mask), n_samples=kwargs['num_points'])
+
+    # Create the return list of dicts
+    return_list = []
+    for i in range(len(sampled_points)):
+        return_list.append({
+            'points': sampled_points[i],
+            'labels': np.ones(1, dtype=np.int32)
+        })
+    return return_list
+
+# Save results using OpenCV for speed
+def save_sam_cv2(video_segments, frames_dir, masks_dir, vis_dir):
+    from utils.tools import get_color_for_id
+    os.makedirs(masks_dir, exist_ok=True)
+    os.makedirs(vis_dir, exist_ok=True)
+    for out_frame_idx in video_segments.keys():
+        frame_path = os.path.join(frames_dir, f"{out_frame_idx:06d}.jpg")
+        frame_bgr = cv2.imread(frame_path)
+        if frame_bgr is None:
+            print(f"Warning: Could not load frame {frame_path}")
+            continue
+        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        overlay_img = frame_rgb.copy().astype(np.float32)
+        for out_obj_id, out_mask in video_segments[out_frame_idx].items():
+            # Save mask as .npy
+            mask_filename = f"frame{out_frame_idx:06d}_obj{out_obj_id}.npy"
+            mask_path = os.path.join(masks_dir, mask_filename)
+            np.save(mask_path, out_mask)
+            # Overlay mask
+            color = get_color_for_id(out_obj_id)
+            color_rgb = np.array(color) * 255
+            mask = out_mask
+            if mask.ndim == 3 and mask.shape[0] == 1:
+                mask = mask.squeeze(0)
+            elif mask.ndim == 3:
+                mask = np.any(mask, axis=0)
+            elif mask.ndim != 2:
+                print(f"Warning: Unexpected mask shape {mask.shape} for object {out_obj_id}, skipping overlay")
+                continue
+            if mask.shape != overlay_img.shape[:2]:
+                print(f"Warning: Mask shape {mask.shape} doesn't match image shape {overlay_img.shape[:2]} for object {out_obj_id}, skipping overlay")
+                continue
+            mask_bool = mask.astype(bool)
+            if np.any(mask_bool):
+                overlay_img[mask_bool] = overlay_img[mask_bool] * 0.4 + color_rgb * 0.6
+        result_img = np.clip(overlay_img, 0, 255).astype(np.uint8)
+        result_bgr = cv2.cvtColor(result_img, cv2.COLOR_RGB2BGR)
+        vis_filename = f"frame{out_frame_idx:06d}.png"
+        vis_path = os.path.join(vis_dir, vis_filename)
+        cv2.imwrite(vis_path, result_bgr)
+    print(f"Saved {len(video_segments)} frames with masks to {masks_dir} and visualizations to {vis_dir}")
+
+def save_points_image_cv2(image_path, points, labels, output_path):
+    """
+    Draw points on the image and save the result using OpenCV.
+    Args:
+        image_path: Path to the input image (str)
+        points: numpy array of shape (N, 2) with (x, y) coordinates
+        labels: numpy array of shape (N,) with integer labels (0 or 1)
+        output_path: Path to save the output image (str)
+    """
+    import cv2
+    import numpy as np
+    # Load image (BGR)
+    img = cv2.imread(image_path)
+    if img is None:
+        raise FileNotFoundError(f"Could not load image: {image_path}")
+    points = np.asarray(points)
+    labels = np.asarray(labels)
+    for idx, (pt, label) in enumerate(zip(points, labels)):
+        x, y = int(round(pt[0])), int(round(pt[1]))
+        color = (0, 255, 0) if label == 1 else (0, 0, 255)  # Green for 1, Red for 0
+        cv2.circle(img, (x, y), radius=6, color=color, thickness=-1)
+        cv2.putText(img, str(idx), (x+8, y-8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+    cv2.imwrite(output_path, img)
+
+def save_points_image_cv2_obj_id(image_path, obj_points, output_path):
+    """
+    Draw points on the image, coloring by obj_id, and save the result using OpenCV.
+    Args:
+        image_path: Path to the input image (str)
+        obj_points: dict mapping obj_id to {'points': np.ndarray, 'labels': np.ndarray}
+        output_path: Path to save the output image (str)
+    """
+    import cv2
+    import numpy as np
+    import matplotlib.pyplot as plt
+    img = cv2.imread(image_path)
+    if img is None:
+        raise FileNotFoundError(f"Could not load image: {image_path}")
+    # Assign a unique color to each obj_id using a colormap
+    obj_ids = sorted(obj_points.keys())
+    cmap = plt.get_cmap('tab20')
+    color_map = {obj_id: tuple(int(255*x) for x in cmap(i % 20)[:3][::-1]) for i, obj_id in enumerate(obj_ids)}
+    for obj_id, data in obj_points.items():
+        points = np.asarray(data['points'])
+        if points.size == 0:
+            continue
+        color = color_map[obj_id]
+        for idx, pt in enumerate(points):
+            x, y = int(round(pt[0])), int(round(pt[1]))
+            cv2.circle(img, (x, y), radius=6, color=color, thickness=-1)
+            cv2.putText(img, str(obj_id), (x+8, y-8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+    cv2.imwrite(output_path, img)
+
+def make_video_from_visualizations(output_folder, video_filename="final_video.mp4", fps=15):
+
+    """
+    Combine all images from all visualizations_* folders into a video.
+    Args:
+        output_folder: Path to the output directory containing visualizations_* folders
+        video_filename: Name of the output video file (mp4)
+        fps: Frames per second for the video
+    """
+    import cv2
+    import glob
+    import os
+    # Find all visualizations_* folders
+    vis_dirs = sorted(
+        [d for d in glob.glob(os.path.join(output_folder, "visualizations_*")) if os.path.isdir(d)],
+        key=lambda x: int(re.findall(r"visualizations_(\d+)", x)[0])
+    )
+    frame_paths = []
+    for vis_dir in vis_dirs:
+        imgs = sorted(glob.glob(os.path.join(vis_dir, "*.png")))
+        frame_paths.extend(imgs)
+    if not frame_paths:
+        raise FileNotFoundError("No frames found in visualizations_* folders.")
+    # Read first image to get size
+    first_img = cv2.imread(frame_paths[0])
+    if first_img is None:
+        raise FileNotFoundError(f"Could not read image: {frame_paths[0]}")
+    height, width = first_img.shape[:2]
+    out_path = os.path.join(output_folder, video_filename)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
+    for img_path in frame_paths:
+        img = cv2.imread(img_path)
+        if img is None:
+            print(f"Warning: Could not read {img_path}, skipping.")
+            continue
+        if img.shape[:2] != (height, width):
+            img = cv2.resize(img, (width, height))
+        out.write(img)
+    out.release()
+    print(f"Video saved to {out_path} ({len(frame_paths)} frames, {fps} fps)")

@@ -7,7 +7,7 @@ defaults:
 recording: cooking
 
 # Input/Output Paths  
-source_folder: ${paths.data_dir}zed/${recording}/images_undistorted_crop
+source_folder: ${paths.data_dir}zed/${recording}/images_minimal
 masks_output_folder: ${paths.data_dir}/zed/${recording}/masks_${stride}_${max_frames}
 mask_images_output_folder: ${paths.data_dir}/zed/${recording}/mask_images_${stride}_${max_frames} 
 output_folder: ${paths.output_dir}
@@ -23,11 +23,11 @@ device: "auto"  # "cuda", "cpu", or "auto" (default: "auto")
 jpeg_quality: 100  # JPEG quality 1-100 (default: 95)
 cleanup_temp: true  # Remove temp files after processing (default: true)
 
-stride: 20
+chunk_size: 5
 overlap: 1
-subsample: 10
+subsample: 4 
 
 viz: false
 
 mask_buffer_radius: 10
-point_sampling_points: 5
+num_points: 5
