@@ -1,7 +1,6 @@
 from utils.sam2_utils import (create_overlapping_subsets, detect_with_furthest, mask_first_frame, 
                                 save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations)
 from sam2.build_sam import build_sam2_video_predictor
-from segment import SAM2Segmenter
 import hydra
 import os
 from PIL import Image
@@ -10,19 +9,17 @@ import numpy as np
 @hydra.main(config_path="../configs", config_name="sam2_reinit.yaml")
 def main(cfg):
     
-    detect_new_regions = detect_with_furthest
-
     # load and subsample images
     subsets = create_overlapping_subsets(cfg.source_folder, cfg.output_folder, cfg.chunk_size, cfg.overlap, cfg.subsample)
 
     # load images
     predictor = build_sam2_video_predictor(
-        config_file = cfg.sam.model_config,
+        config_file = cfg.sam.model_cfg,
         ckpt_path = cfg.sam.sam2_checkpoint,
         device = "cuda"
     )
 
-    segmenter = SAM2Segmenter(sam2_checkpoint = cfg.sam.sam2_checkpoint, model_cfg = cfg.sam.model_config)
+    segmenter = hydra.utils.instantiate(cfg.sam)
 
     # load first image
     first_image_path = subsets[0] + "/000000.jpg"
@@ -94,7 +91,7 @@ def main(cfg):
             full_mask += mask
 
         # Detect new regions
-        new_regions = detect_new_regions(full_mask, mask_buffer_radius=cfg.mask_buffer_radius, num_points=cfg.num_points)
+        new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
         # add new categories
         next_obj_id = len(obj_points)
         for j, new_region in enumerate(new_regions):

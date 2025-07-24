@@ -1,2 +1,19 @@
+# package: global
+_target_: src.segment.SAM2Segmenter
 sam2_checkpoint: "${paths.checkpoints_dir}/sam2.1_hiera_small.pt"
-model_config: "${paths.root_dir}/sam2/sam2/configs/sam2.1/sam2.1_hiera_s.yaml"
+model_cfg: "/${paths.root_dir}/sam2/sam2/configs/sam2.1/sam2.1_hiera_s.yaml"
+
+# mask generation parameters
+points_per_side: 32
+points_per_batch: 128
+pred_iou_thresh: 0.8
+stability_score_thresh: 0.95
+stability_score_offset: 1.0
+box_nms_thresh: 0.8
+crop_n_layers: 0
+crop_nms_thresh: 0.7
+crop_overlap_ratio: 512/1500
+crop_n_points_downscale_factor: 1
+min_mask_region_area: 0.
+use_m2m: False
+multimask_output: True

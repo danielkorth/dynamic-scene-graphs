@@ -6,15 +6,10 @@ import os
 from PIL import Image
 import math
 from skimage.measure import label, regionprops
-import random
 import glob
 
-from sam2.build_sam import build_sam2_video_predictor, build_sam2_camera_predictor
 from segment import SAM2Segmenter
-from utils.tools import get_bounding_box, sample_points_in_mask, mask_union_and_coverage
-from tqdm import tqdm
 from scipy.ndimage import binary_erosion
-from utils.tools import get_color_for_id  # Ensure import is present
 
 
 def show_mask(mask, ax, obj_id=None, random_color=False):
@@ -467,9 +462,9 @@ def farthest_point_sampling(mask, n_samples, border=0):
     return selected[:, [1, 0]]
 
 
-def detect_with_furthest(full_mask, **kwargs):
-    safe_mask = get_dilated_mask(np.squeeze(full_mask), buffer_radius=kwargs['mask_buffer_radius'])
-    sampled_points = farthest_point_sampling(np.squeeze(~safe_mask), n_samples=kwargs['num_points'])
+def detect_with_furthest(full_mask, buffer_radius, n_samples):
+    safe_mask = get_dilated_mask(np.squeeze(full_mask), buffer_radius=buffer_radius)
+    sampled_points = farthest_point_sampling(np.squeeze(~safe_mask), n_samples=n_samples)
 
     # Create the return list of dicts
     return_list = []
