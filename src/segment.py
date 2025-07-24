@@ -1,7 +1,7 @@
 import numpy as np
-from typing import List, Tuple
+from typing import List
 import matplotlib.pyplot as plt
-
+import torch
 from sam2.build_sam import build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
@@ -29,46 +29,14 @@ def show_anns(mask_color_pairs, ax=None, borders=True):
 
     ax.imshow(img)
 
-
-# mask_generator_2 = SAM2AutomaticMaskGenerator(
-#     model=sam2,
-#     points_per_side=64,
-#     points_per_batch=128,
-#     pred_iou_thresh=0.7,
-#     stability_score_thresh=0.92,
-#     stability_score_offset=0.7,
-#     crop_n_layers=1,
-#     box_nms_thresh=0.7,
-#     crop_n_points_downscale_factor=2,
-#     min_mask_region_area=25.0,
-#     use_m2m=True,
-# )
-
 class SAM2Segmenter:
-    # segmenter = SAM2Segmenter(
-    #     sam2_checkpoint="checkpoints/sam2.1/sam2.1_hiera_tiny.pt",
-    #     model_cfg="configs/sam2.1/sam2.1_hiera_t.yaml"
-    # )
-    # masks = segmenter.segment(image)
-    def __init__(self, sam2_checkpoint: str, model_cfg: str, device: str = "cuda", apply_postprocessing: bool = False):
+    def __init__(self, sam2_checkpoint: str, model_cfg: str, device: str = "cuda", apply_postprocessing: bool = False, **kwargs):
         self.sam2 = build_sam2(model_cfg, sam2_checkpoint, device=device, apply_postprocessing=apply_postprocessing)
-        self.mask_generator = SAM2AutomaticMaskGenerator(self.sam2)
-        # self.mask_generator = SAM2AutomaticMaskGenerator(
-        #     self.sam2, 
-        #     points_per_side=64, 
-        #     points_per_batch=128, 
-        #     pred_iou_thresh=0.7, 
-        #     stability_score_thresh=0.92, 
-        #     stability_score_offset=0.7, 
-        #     crop_n_layers=1, 
-        #     box_nms_thresh=0.7, 
-        #     crop_n_points_downscale_factor=2, 
-        #     min_mask_region_area=25.0, 
-        #     use_m2m=True
-        # )
+        self.mask_generator = SAM2AutomaticMaskGenerator(self.sam2, **kwargs)
 
     def segment(self, image: np.ndarray) -> List[np.ndarray]:
-        masks = self.mask_generator.generate(image)
+        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+            masks = self.mask_generator.generate(image)
         return masks
 
     def visualize_masks(self, image: np.ndarray, masks: List[dict], only_masks: bool = False, show_bbox: bool = False, show_points: bool = False, show_stability: bool = False) -> None:

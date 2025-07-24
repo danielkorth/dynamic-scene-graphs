@@ -6,15 +6,10 @@ import os
 from PIL import Image
 import math
 from skimage.measure import label, regionprops
-import random
 import glob
 
-from sam2.build_sam import build_sam2_video_predictor, build_sam2_camera_predictor
 from segment import SAM2Segmenter
-from utils.tools import get_bounding_box, sample_points_in_mask, mask_union_and_coverage
-from tqdm import tqdm
 from scipy.ndimage import binary_erosion
-from utils.tools import get_color_for_id  # Ensure import is present
 
 
 def show_mask(mask, ax, obj_id=None, random_color=False):
@@ -432,16 +427,17 @@ def farthest_point_sampling(mask, n_samples, border=0):
     return selected[:, [1, 0]]
 
 
-def detect_with_furthest(full_mask, **kwargs):
-    safe_mask = get_dilated_mask(np.squeeze(full_mask), buffer_radius=kwargs['mask_buffer_radius'])
-    sampled_points = farthest_point_sampling(np.squeeze(~safe_mask), n_samples=kwargs['num_points'])
+def detect_with_furthest(full_mask, buffer_radius, n_samples):
+    safe_mask = get_dilated_mask(np.squeeze(full_mask), buffer_radius=buffer_radius)
+    sampled_points = farthest_point_sampling(np.squeeze(~safe_mask), n_samples=n_samples)
 
     # Create the return list of dicts
     return_list = []
     for i in range(len(sampled_points)):
         return_list.append({
             'points': sampled_points[i],
-            'labels': np.ones(1, dtype=np.int32)
+            'labels': np.ones(1, dtype=np.int32),
+            'mask': None
         })
     return return_list
 
@@ -529,30 +525,27 @@ def sample_points_per_cc(
     return sampled_points[:, [1, 0]]
 
 def detect_with_cc(full_mask, **kwargs):
-    safe_mask = get_dilated_mask(np.squeeze(full_mask), buffer_radius=kwargs['mask_buffer_radius'])
+    safe_mask = get_dilated_mask(np.squeeze(full_mask), buffer_radius=kwargs['buffer_radius'])
     sampled_points = sample_points_per_cc(np.squeeze(~safe_mask), viz=False)
+
+    # Create the return list of dicts
     return_list = []
-    if 'img_segmenter' in kwargs:
-        img_segmenter = kwargs['img_segmenter']
-        img_np = kwargs['img_np']
-        img_segmenter.set_image(img_np)
-        masks, scores, _ = img_segmenter.predict(sampled_points[:, None, :], np.ones(len(sampled_points), dtype=np.int32)[:, None],
-                                               multimask_output = False)
-        masks = masks.squeeze(1).astype(bool)
-        idx_keep = nms_masks(masks, scores.squeeze(), iou_threshold=0.5)
-        masks = masks[idx_keep]
-        sampled_points = sampled_points[idx_keep]
-    else:
-        masks = [None] * len(sampled_points)
-
     for i in range(len(sampled_points)):
-
         return_list.append({
             'points': sampled_points[i],
             'labels': np.ones(1, dtype=np.int32),
-            'mask': masks[i]
+            'mask': None
             })
     return return_list
+
+def get_mask_from_points(points, img_segmenter, img_np, iou_threshold=0.5):
+    img_segmenter.set_image(img_np)
+    labels = np.ones(len(points), dtype=np.int32)
+    masks, scores, _ = img_segmenter.predict(points[:, None, :], labels[:, None],
+                                               multimask_output = False)
+    masks = masks.squeeze(1).astype(bool)
+    idx_keep = nms_masks(masks, scores.squeeze(), iou_threshold=iou_threshold)
+    return idx_keep
 
 def compute_iou(mask1, mask2):
         intersection = np.logical_and(mask1, mask2).sum()
