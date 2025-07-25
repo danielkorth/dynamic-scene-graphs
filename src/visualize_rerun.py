@@ -2,7 +2,7 @@ from pathlib import Path
 import argparse
 import rerun as rr
 from utils.colmap_utils import load_colmap_poses
-from utils.data_loading import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, load_all_masks, get_camera_matrix, get_distortion_coeffs
+from utils.data_loading import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, load_all_masks, get_camera_matrix, get_distortion_coeffs, load_all_points
 from utils.rerun import setup_blueprint
 from utils.tools import get_color_for_id
 import numpy as np
@@ -13,7 +13,7 @@ import hydra
 from omegaconf import DictConfig
 
 
-@hydra.main(config_path="../configs", config_name="viz_rerun")
+@hydra.main(config_path="../configs", config_name="sam2_reinit")
 def main(cfg: DictConfig):
     # set up rerun env
     if cfg.headless:
@@ -43,12 +43,12 @@ def main(cfg: DictConfig):
     # K = get_camera_matrix(intrinsics)
     # dist = get_distortion_coeffs(intrinsics)
 
-    rgb_images = load_all_rgb_images(cfg.images_folder, max_frames=cfg.max_frames, subsample=cfg.stride)
-    depth_images = load_all_depth_images(cfg.images_folder, max_frames=cfg.max_frames, subsample=cfg.stride)
-    mask_images = load_all_masks(cfg.masks_output_folder, max_frames=cfg.max_frames, subsample=cfg.stride)
+    rgb_images = load_all_rgb_images(cfg.images_folder, max_frames=cfg.max_frames, subsample=cfg.subsample)
+    depth_images = load_all_depth_images(cfg.images_folder, max_frames=cfg.max_frames, subsample=cfg.subsample)
+    obj_points = load_all_points(cfg.obj_points_dir, max_frames=cfg.max_frames, subsample=cfg.subsample)
 
     # zed poses
-    tvecs, rvecs = load_poses(Path(cfg.source_folder) / "poses.txt", max_frames=cfg.max_frames, subsample=cfg.stride)
+    tvecs, rvecs = load_poses(Path(cfg.source_folder) / "poses.txt", max_frames=cfg.max_frames, subsample=cfg.subsample)
 
     print(f"Loaded {len(rgb_images)} RGB images and {len(depth_images)} depth images")
     print(f"Loaded {len(tvecs)} poses (translations: {len(tvecs)}, rotations: {len(rvecs)})")
@@ -67,17 +67,17 @@ def main(cfg: DictConfig):
     from scenegraph.node import Node
     graph = SceneGraph()
 
-    for i, (rgb, depth, tvec, rvec, mask_dict) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs, mask_images)):
+    for i, (rgb, depth, tvec, rvec, obj_points) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs, obj_points)):
         rr.log("camera", rr.Transform3D(
             mat3x3=Rotation.from_rotvec(rvec).as_matrix(),
             translation=tvec,
         ))
         rr.log("camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
 
-        for obj_id, mask in mask_dict.items():
-            if mask.sum() == 0:
+        for obj_id, obj_point in obj_points.items():
+            if obj_point['mask'].sum() == 0:
                 continue
-            points_3d, _ = unproject_image(depth, K, rvec, tvec, mask=mask, dist=None)
+            points_3d, _ = unproject_image(depth, K, rvec, tvec, mask=obj_point['mask'], dist=None)
             centroid = np.mean(points_3d, axis=0)
 
             if f"obj_{obj_id}" not in graph:

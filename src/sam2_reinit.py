@@ -1,5 +1,5 @@
 from utils.sam2_utils import (create_overlapping_subsets, detect_with_furthest, is_new_obj, mask_first_frame, 
-                                save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations, detect_with_cc, get_mask_from_points)
+                                save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations, detect_with_cc, get_mask_from_points, save_obj_points)
 from sam2.build_sam import build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from segment import SAM2Segmenter
@@ -12,7 +12,10 @@ import numpy as np
 def main(cfg):
     
     # load and subsample images
-    subsets = create_overlapping_subsets(cfg.source_folder, cfg.output_folder, cfg.chunk_size, cfg.overlap, cfg.subsample)
+    subsets = create_overlapping_subsets(cfg.images_folder, cfg.output_folder, cfg.chunk_size, cfg.overlap, cfg.subsample)
+
+    obj_points_dir = os.path.join(cfg.output_folder, "obj_points_history")
+    os.makedirs(obj_points_dir, exist_ok=True)
 
     # load images
     predictor = build_sam2_video_predictor(
@@ -45,12 +48,15 @@ def main(cfg):
 
     # save the points image
     save_points_image_cv2_obj_id(os.path.join(subsets[0], "000000.jpg"), obj_points, os.path.join(cfg.output_folder, "frame_0_obj_id.png"))
+    save_obj_points(obj_points, os.path.join(obj_points_dir, "obj_points_0.npy"))
 
+    global_counter = 0
     # LOOP THE SUBSETS
     for i in range(len(subsets)):
         # initialize tracking
         inference_state = predictor.init_state(video_path=subsets[i])
 
+        # reinit the inference state and add new points and labels
         for obj_id, obj_data in obj_points.items():
             # if we have mask, transfer it. otherwise, use points.
             if obj_data['mask'] is not None:
@@ -81,16 +87,22 @@ def main(cfg):
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
                 for i, out_obj_id in enumerate(out_obj_ids)
             }
+            # update mask
+            for obj_id, mask in video_segments[out_frame_idx].items():
+                obj_points[obj_id]['mask'] = mask.squeeze()
+            # save item
+            if i > 0: # skip first because of overlap
+                save_obj_points(obj_points, os.path.join(obj_points_dir, f"obj_points_{global_counter*cfg.subsample}.npy"))
+                global_counter += 1
 
         # save the results
         output_masks_dir = os.path.join(cfg.output_folder, f"masks_{i}")
         output_vis_dir = os.path.join(cfg.output_folder, f"visualizations_{i}")
         save_sam_cv2(video_segments, subsets[i], output_masks_dir, output_vis_dir)
-
+    
         # update the points and labels for next episode
         full_mask = np.zeros_like(video_segments[len(video_segments) - 1][0])
         for obj_id, mask in video_segments[len(video_segments) - 1].items():
-            obj_points[obj_id]['mask'] = mask.squeeze()
             full_mask += mask
 
         # Detect new regions

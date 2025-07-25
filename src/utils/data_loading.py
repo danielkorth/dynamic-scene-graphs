@@ -435,3 +435,80 @@ def load_all_masks(masks_dir, max_frames=None, subsample=None):
         mask_frames.append(frame_masks)
     
     return mask_frames
+
+def load_all_points(points_dir, max_frames=None, subsample=None):
+    """Load all obj_points files from a directory.
+    This function handles synchronization with other data streams (e.g., RGB)
+    by selecting the points file with the frame number closest to the target frame.
+    
+    Args:
+        points_dir: Path to the directory containing obj_points_*.npy files
+        max_frames: Maximum number of frames to load (None for all)
+        subsample: Subsample every Nth frame (None for no subsampling)
+        
+    Returns:
+        points_frames: list of dicts, where each dict is an obj_points structure
+    """
+    import re
+    from .sam2_utils import load_obj_points
+    
+    points_pattern = os.path.join(points_dir, "obj_points_*.npy")
+    points_files = glob.glob(points_pattern)
+    
+    if not points_files:
+        raise FileNotFoundError(f"No obj_points files found in {points_dir}")
+        
+    frame_to_file_map = {}
+    for f in points_files:
+        match = re.search(r'obj_points_(\d+)\.npy', os.path.basename(f))
+        if match:
+            frame_num = int(match.group(1))
+            frame_to_file_map[frame_num] = f
+            
+    if not frame_to_file_map:
+        return []
+        
+    frame_numbers = sorted(frame_to_file_map.keys())
+    
+    if subsample is not None or max_frames is not None:
+        start_frame = frame_numbers[0]
+        
+        target_frames = []
+        frame_idx = 0
+        current_frame = start_frame
+        
+        # This loop generates the ideal frame indices based on subsampling
+        while True:
+            if subsample is None or frame_idx % subsample == 0:
+                target_frames.append(current_frame)
+                
+                if max_frames is not None and len(target_frames) >= max_frames:
+                    break
+            
+            frame_idx += 1
+            current_frame += 1
+            
+            if current_frame > frame_numbers[-1] * subsample:
+                break
+        
+        selected_frames = []
+        for target_frame in target_frames:
+            # Find the closest available frame number
+            best_frame = min(frame_numbers, key=lambda x: abs(x - target_frame))
+            if best_frame not in selected_frames:
+                selected_frames.append(best_frame)
+        
+        frame_numbers = selected_frames
+
+    points_frames = []
+    
+    for frame_num in tqdm(frame_numbers, desc="Loading obj_points"):
+        points_file = frame_to_file_map[frame_num]
+        try:
+            obj_points = load_obj_points(points_file)
+            points_frames.append(obj_points)
+        except Exception as e:
+            print(f"Warning: Failed to load {points_file}: {e}")
+            continue
+            
+    return points_frames

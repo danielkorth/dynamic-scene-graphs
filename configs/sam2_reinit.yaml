@@ -1,24 +1,33 @@
 defaults:
   - paths: default
   - sam: tiny
-  - new_objects_fct: farthest_point 
+  - new_objects_fct: sampling_cc #farthest_point 
   - _self_
 
 # needs to be provided
 recording: office1
 
 # Input/Output Paths  
-source_folder: ${paths.data_dir}zed/${recording}/images_minimal
+source_folder: ${paths.data_dir}zed/${recording}
+images_folder: ${paths.data_dir}zed/${recording}/images_undistorted_crop
 masks_output_folder: ${paths.data_dir}/zed/${recording}/masks_${stride}_${max_frames}
 mask_images_output_folder: ${paths.data_dir}/zed/${recording}/mask_images_${stride}_${max_frames} 
 output_folder: ${paths.output_dir}
+intrinsics_file: ${images_folder}/intrinsics.txt
+# hardcoded for now
+obj_points_dir: /local/home/dkorth/Projects/dynamic-scene-graphs/outputs/2025-07-24/18-53-32/obj_points_history
 
 # Frame configs
-subsample: 4 # subsample factor on original frames
-chunk_size: 5 # chunk size of overlapping subsets
+subsample: 20 # subsample factor on original frames
+chunk_size: 10 # chunk size of overlapping subsets
 overlap: 1 # overlap between chunks
 
 # Prompt with masks
 prompt_with_masks: false
 
 viz: false # visualize the first segmentation
+
+
+# rerun viz specific
+max_frames: 100  # Max frames to process, 0=no limit (default: 0)
+headless: false

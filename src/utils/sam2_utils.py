@@ -706,6 +706,21 @@ def save_points_image_cv2_obj_id(image_path, obj_points, output_path):
             cv2.putText(img, str(obj_id), (x+8, y-8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
     cv2.imwrite(output_path, img)
 
+def save_obj_points(obj_points, filepath):
+    """Saves obj_points dictionary to a .npy file."""
+    # Convert defaultdict to dict for broader compatibility.
+    np.save(filepath, dict(obj_points), allow_pickle=True)
+    print(f"Saved obj_points to {filepath}")
+
+def load_obj_points(filepath):
+    """Loads obj_points from a .npy file."""
+    from collections import defaultdict
+    loaded_dict = np.load(filepath, allow_pickle=True).item()
+    obj_points = defaultdict(lambda: {'points': [], 'labels': [], 'mask': None})
+    obj_points.update(loaded_dict)
+    print(f"Loaded obj_points from {filepath}")
+    return obj_points
+
 def make_video_from_visualizations(output_folder, video_filename="final_video.mp4", fps=15):
 
     """
