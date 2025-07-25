@@ -7,6 +7,7 @@ from tqdm import tqdm
 from utils.data_loading import load_poses
 from utils.open3d_utils import pc_from_rgbd_with_mask, rt_to_mat, create_camera_mesh
 from utils.tools import get_color_for_id
+from utils.sam2_utils import load_obj_points
 
 # --------------------------------------------
 # Main
@@ -19,7 +20,7 @@ if __name__ == '__main__':
     # cam_params_file = './data/SN35693142.conf'
     sam_dir = './outputs/2025-07-25/14-38-06/'  # Directory with masks_X and visualizations_X folders
 
-    stride = 10  # Set this to your stride value
+    stride = 40  # Set this to your stride value
 
     # Load camera intrinsics
     if cam_params_file.endswith('.conf'):
