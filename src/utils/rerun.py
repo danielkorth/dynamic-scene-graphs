@@ -9,6 +9,7 @@ def setup_blueprint():
             rrb.Horizontal(
                 rrb.Spatial2DView(name="RGB", origin="world/camera/image", contents="world/camera/image/rgb"),
                 rrb.Spatial2DView(name="Depth", origin="world/camera/image", contents="world/camera/image/depth"),
+                rrb.Spatial2DView(name="Mask", origin="world/camera/image", contents="world/camera/image/mask"),
                 name="2D",
             ),
             row_shares=[7,3]
