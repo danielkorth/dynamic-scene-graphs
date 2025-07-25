@@ -13,21 +13,35 @@ from utils.tools import get_color_for_id
 # --------------------------------------------
 if __name__ == '__main__':
     # Paths (edit as needed)
-    data_folder = './data/zed/kitchen1/images_undistorted_crop'
-    pose_file = './data/zed/kitchen1/poses.txt'
-    cam_params_file = './data/SN35693142.conf'
-    sam_dir = './outputs/2025-07-25/13-06-51/'  # Directory with masks_X and visualizations_X folders
+    data_folder = './data/zed/office1/images_undistorted_crop'
+    pose_file = './data/zed/office1/poses.txt'
+    cam_params_file = './data/zed/office1/images_undistorted_crop/intrinsics.txt'
+    # cam_params_file = './data/SN35693142.conf'
+    sam_dir = './outputs/2025-07-25/14-38-06/'  # Directory with masks_X and visualizations_X folders
 
     stride = 10  # Set this to your stride value
 
     # Load camera intrinsics
-    config = configparser.ConfigParser()
-    config.read(cam_params_file)
-    section = 'LEFT_CAM_HD'
-    fx = float(config[section]['fx'])
-    fy = float(config[section]['fy'])
-    cx = float(config[section]['cx'])
-    cy = float(config[section]['cy'])
+    if cam_params_file.endswith('.conf'):
+        config = configparser.ConfigParser()
+        config.read(cam_params_file)
+        section = 'LEFT_CAM_HD'
+        fx = float(config[section]['fx'])
+        fy = float(config[section]['fy'])
+        cx = float(config[section]['cx'])
+        cy = float(config[section]['cy'])
+
+    elif cam_params_file.endswith('.txt'):
+        # load intrinsics
+        with open(cam_params_file, "r") as f:
+            intrinsics = f.readlines()
+            fx = float(intrinsics[0].split(" ")[0])
+            fy = float(intrinsics[1].split(" ")[0])
+            cx = float(intrinsics[2].split(" ")[0])
+            cy = float(intrinsics[3].split(" ")[0])
+
+    else:
+        raise ValueError(f"Unsupported camera parameters file format: {cam_params_file}")
     # Get width and height from the first color image
     sample_color_path = None
     for f in sorted(os.listdir(data_folder)):

@@ -16,15 +16,16 @@ class SceneGraph:
     def __contains__(self, node_name: str):
         return node_name in self.nodes
     
-    def log_rerun(self, show_pct: bool = False):
+    def log_rerun(self, show_pct: bool = False, max_points: int = 5000):
         edges = rr.LineStrips3D(strips=np.array([[edge.source.centroid, edge.target.centroid] for edge in self.edges]))
         rr.log("centroids", rr.Points3D(positions=np.array([self.nodes[node_name].centroid for node_name in self.nodes]), colors=np.array([0, 0, 0]), radii=0.01))
         for node_name in self.nodes:
             if show_pct:
                 rr.log(f"pcts/{node_name}", rr.Points3D(
-                    positions=self.nodes[node_name].pct, 
+                    # sample max_points points
+                    positions=self.nodes[node_name].pct[np.random.choice(self.nodes[node_name].pct.shape[0], min(max_points, self.nodes[node_name].pct.shape[0]), replace=False)], 
                     colors=self.nodes[node_name].color, 
-                    radii=0.001))
+                    radii=0.003))
         rr.log("edges", edges)
 
     def log_open3d(self):

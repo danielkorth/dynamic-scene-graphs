@@ -10,7 +10,6 @@ import numpy as np
 
 @hydra.main(config_path="../configs", config_name="sam2_reinit.yaml")
 def main(cfg):
-    
     # load and subsample images
     subsets = create_overlapping_subsets(cfg.images_folder, cfg.output_folder, cfg.chunk_size, cfg.overlap, cfg.subsample)
 
@@ -50,7 +49,7 @@ def main(cfg):
     save_points_image_cv2_obj_id(os.path.join(subsets[0], "000000.jpg"), obj_points, os.path.join(cfg.output_folder, "frame_0_obj_id.png"))
     save_obj_points(obj_points, os.path.join(obj_points_dir, "obj_points_0.npy"))
 
-    global_counter = 0
+    global_counter = 1
     # LOOP THE SUBSETS
     for i in range(len(subsets)):
         # initialize tracking
@@ -82,7 +81,7 @@ def main(cfg):
 
         # propagate the tracking
         video_segments = {}
-        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+        for j, (out_frame_idx, out_obj_ids, out_mask_logits) in enumerate(predictor.propagate_in_video(inference_state)):
             video_segments[out_frame_idx] = {
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
                 for i, out_obj_id in enumerate(out_obj_ids)
@@ -91,7 +90,7 @@ def main(cfg):
             for obj_id, mask in video_segments[out_frame_idx].items():
                 obj_points[obj_id]['mask'] = mask.squeeze()
             # save item
-            if i > 0: # skip first because of overlap
+            if j > 0: # skip first because of overlap
                 save_obj_points(obj_points, os.path.join(obj_points_dir, f"obj_points_{global_counter*cfg.subsample}.npy"))
                 global_counter += 1
 

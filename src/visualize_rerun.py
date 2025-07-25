@@ -12,6 +12,11 @@ import time
 import hydra
 from omegaconf import DictConfig
 
+def aggregate_masks(obj_points):
+    mask = np.zeros(obj_points[0]['mask'].shape)
+    for i, obj_point in enumerate(obj_points.values()):
+        mask[obj_point['mask']] = i+1
+    return mask
 
 @hydra.main(config_path="../configs", config_name="sam2_reinit")
 def main(cfg: DictConfig):
@@ -43,9 +48,12 @@ def main(cfg: DictConfig):
     # K = get_camera_matrix(intrinsics)
     # dist = get_distortion_coeffs(intrinsics)
 
-    rgb_images = load_all_rgb_images(cfg.images_folder, max_frames=cfg.max_frames, subsample=cfg.subsample)
-    depth_images = load_all_depth_images(cfg.images_folder, max_frames=cfg.max_frames, subsample=cfg.subsample)
-    obj_points = load_all_points(cfg.obj_points_dir, max_frames=cfg.max_frames, subsample=cfg.subsample)
+    from utils.data_loading import load_everything
+    data = load_everything(cfg.images_folder, cfg.obj_points_dir, max_frames=cfg.max_frames, subsample=cfg.subsample)
+
+    rgb_images = data["rgb"]
+    depth_images = data["depth"]
+    obj_points = data["obj_points"]
 
     # zed poses
     tvecs, rvecs = load_poses(Path(cfg.source_folder) / "poses.txt", max_frames=cfg.max_frames, subsample=cfg.subsample)
@@ -53,9 +61,9 @@ def main(cfg: DictConfig):
     print(f"Loaded {len(rgb_images)} RGB images and {len(depth_images)} depth images")
     print(f"Loaded {len(tvecs)} poses (translations: {len(tvecs)}, rotations: {len(rvecs)})")
 
-    rr.log("camera", rr.ViewCoordinates.RDF)
+    rr.log("world/camera", rr.ViewCoordinates.RDF)
 
-    rr.log("camera/image", rr.Pinhole(
+    rr.log("world/camera/image", rr.Pinhole(
         resolution=[rgb_images[0].shape[1], rgb_images[0].shape[0]],
         principal_point=[intrinsics["cx"], intrinsics["cy"]],
         focal_length=[intrinsics["fx"], intrinsics["fy"]],
@@ -68,16 +76,18 @@ def main(cfg: DictConfig):
     graph = SceneGraph()
 
     for i, (rgb, depth, tvec, rvec, obj_points) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs, obj_points)):
-        rr.log("camera", rr.Transform3D(
+        rr.log("world/camera", rr.Transform3D(
             mat3x3=Rotation.from_rotvec(rvec).as_matrix(),
             translation=tvec,
         ))
-        rr.log("camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
+        rr.log("world/camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
+        rr.log("world/camera/image/depth", rr.DepthImage(depth/1000.0))
+        rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks(obj_points)))
 
         for obj_id, obj_point in obj_points.items():
             if obj_point['mask'].sum() == 0:
                 continue
-            points_3d, _ = unproject_image(depth, K, rvec, tvec, mask=obj_point['mask'], dist=None)
+            points_3d, _ = unproject_image(depth, K, -rvec, tvec, mask=obj_point['mask'], dist=None)
             centroid = np.mean(points_3d, axis=0)
 
             if f"obj_{obj_id}" not in graph:
@@ -85,7 +95,10 @@ def main(cfg: DictConfig):
                 color = np.array(get_color_for_id(obj_id))
                 graph.add_node(Node(f"obj_{obj_id}", centroid, color=color, pct=points_3d))
             else:
-                graph.nodes[f'obj_{obj_id}'].pct = points_3d
+                if cfg.accumulate_points:
+                    graph.nodes[f'obj_{obj_id}'].pct = np.vstack([graph.nodes[f'obj_{obj_id}'].pct, points_3d])
+                else:
+                    graph.nodes[f'obj_{obj_id}'].pct = points_3d
                 graph.nodes[f'obj_{obj_id}'].centroid = centroid
 
         print("Graph size: ", len(graph))

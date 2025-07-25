@@ -4,6 +4,7 @@ import cv2
 import os
 import glob
 from tqdm import tqdm
+from utils.sam2_utils import load_obj_points
 
 def load_poses(path, max_frames=None, subsample=None):
     """Load poses from a CSV file with format: timestamp,tx,ty,tz,rx,ry,rz
@@ -274,6 +275,36 @@ def load_all_rgb_images(images_dir, max_frames=None, subsample=None):
     
     return np.array(rgb_images)
 
+def load_everything(images_dir, obj_points_dir, max_frames=None, subsample=None):
+    # calc number of images
+    rgb_pattern = os.path.join(images_dir, "left*.png")
+    rgb_files = sorted(glob.glob(rgb_pattern))
+    num_images = len(rgb_files)
+
+    data = {"rgb": [], "depth": [], "obj_points": []}
+
+    count = 0
+    for i in range(0, num_images, subsample):
+        # rgb
+        rgb_file = os.path.join(images_dir, f"left{i:06d}.png")
+        rgb_image = cv2.imread(rgb_file, cv2.IMREAD_COLOR)
+        rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
+        data["rgb"].append(rgb_image)
+        # depth
+        depth_file = os.path.join(images_dir, f"depth{i:06d}.png")
+        depth_image = cv2.imread(depth_file, cv2.IMREAD_UNCHANGED)
+        data["depth"].append(depth_image)
+        # obj_points
+        obj_points_file = os.path.join(obj_points_dir, f"obj_points_{i}.npy")
+        obj_points = load_obj_points(obj_points_file)
+        data["obj_points"].append(obj_points)
+        count += 1
+        if count > max_frames:
+            break
+
+    return data
+
+
 def load_all_depth_images(images_dir, max_frames=None, subsample=None):
     """Load all depth images from ZED camera data directory
     
@@ -450,7 +481,7 @@ def load_all_points(points_dir, max_frames=None, subsample=None):
         points_frames: list of dicts, where each dict is an obj_points structure
     """
     import re
-    from .sam2_utils import load_obj_points
+    from utils.sam2_utils import load_obj_points
     
     points_pattern = os.path.join(points_dir, "obj_points_*.npy")
     points_files = glob.glob(points_pattern)
