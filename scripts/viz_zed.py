@@ -102,9 +102,9 @@ def visualize_zed_data(data_folder, pose_file, cam_params_file, max_frames=10, s
 # Example usage
 if __name__ == "__main__":
     visualize_zed_data(
-        data_folder='./data/zed/cooking/images',
-        pose_file='./data/zed/cooking/poses.txt',
+        data_folder='./data/zed/office1/images_undistorted_crop',
+        pose_file='./data/zed/office1/poses.txt',
         cam_params_file='./data/SN35693142.conf',
-        max_frames=-1,       # Load first 50 poses
-        subsample=20          # Process every 5th frame
+        max_frames=None,       # Load first 50 poses
+        subsample=40          # Process every 5th frame
     )
