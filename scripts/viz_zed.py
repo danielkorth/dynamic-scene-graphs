@@ -6,20 +6,45 @@ import configparser
 
 from utils.data_loading import load_poses
 from utils.open3d_utils import create_camera_mesh
+from utils.data_loading import get_camera_matrix
 
 
 def visualize_zed_data(data_folder, pose_file, cam_params_file, max_frames=10, subsample=1):
     # Load camera intrinsics
-    config = configparser.ConfigParser()
-    config.read(cam_params_file)
-    section = 'LEFT_CAM_HD'
-    fx = float(config[section]['fx'])
-    fy = float(config[section]['fy'])
-    cx = float(config[section]['cx'])
-    cy = float(config[section]['cy'])
+    if cam_params_file.endswith('.conf'):
+        config = configparser.ConfigParser()
+        config.read(cam_params_file)
+        section = 'LEFT_CAM_HD'
+        fx = float(config[section]['fx'])
+        fy = float(config[section]['fy'])
+        cx = float(config[section]['cx'])
+        cy = float(config[section]['cy'])
+
+    elif cam_params_file.endswith('.txt'):
+        # load intrinsics
+        with open(cam_params_file, "r") as f:
+            intrinsics = f.readlines()
+            fx = float(intrinsics[0].split(" ")[0])
+            fy = float(intrinsics[1].split(" ")[0])
+            cx = float(intrinsics[2].split(" ")[0])
+            cy = float(intrinsics[3].split(" ")[0])
+
+    else:
+        raise ValueError(f"Unsupported camera parameters file format: {cam_params_file}")
     
     # Create Open3D intrinsic object (assume 2K resolution)
-    intrinsic = o3d.camera.PinholeCameraIntrinsic(2208, 1242, fx, fy, cx, cy)
+    # Get width and height from the first color image
+    sample_color_path = None
+    for f in sorted(os.listdir(data_folder)):
+        if f.startswith('left') and f.endswith('.png'):
+            sample_color_path = os.path.join(data_folder, f)
+            break
+    if sample_color_path is None:
+        raise RuntimeError(f"No color images found in {data_folder}")
+    sample_color = o3d.io.read_image(sample_color_path)
+    sample_color_np = np.asarray(sample_color)
+    height, width = sample_color_np.shape[0], sample_color_np.shape[1]
+    intrinsic = o3d.camera.PinholeCameraIntrinsic(width, height, fx, fy, cx, cy)
     
     # Load camera poses
     translations, rotations = load_poses(
@@ -102,9 +127,10 @@ def visualize_zed_data(data_folder, pose_file, cam_params_file, max_frames=10, s
 # Example usage
 if __name__ == "__main__":
     visualize_zed_data(
-        data_folder='./data/zed/cooking/images',
-        pose_file='./data/zed/cooking/poses.txt',
-        cam_params_file='./data/SN35693142.conf',
-        max_frames=-1,       # Load first 50 poses
-        subsample=20          # Process every 5th frame
+        data_folder='./data/zed/office1/images_undistorted_crop',
+        pose_file='./data/zed/office1/poses.txt',
+        cam_params_file='./data/zed/office1/images_undistorted_crop/intrinsics.txt',
+        # cam_params_file='./data/SN35693142.conf',
+        max_frames=None,       # Load first 50 poses
+        subsample=40          # Process every 5th frame
     )
