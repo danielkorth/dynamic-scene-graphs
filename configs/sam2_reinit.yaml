@@ -1,7 +1,7 @@
 defaults:
   - paths: default
   - sam: tiny
-  - new_objects_fct: farthest_point #sampling_cc
+  - new_objects_fct: automask # farthest_point #sampling_cc
   - _self_
 
 # needs to be provided
@@ -18,12 +18,12 @@ intrinsics_file: ${images_folder}/intrinsics.txt
 obj_points_dir: /local/home/dkorth/Projects/dynamic-scene-graphs/outputs/2025-07-25/12-55-37/obj_points_history
 
 # Frame configs
-subsample: 40 # subsample factor on original frames
+subsample: 10 # subsample factor on original frames
 chunk_size: 10 # chunk size of overlapping subsets
 overlap: 1 # overlap between chunks
 
 # Prompt with masks
-prompt_with_masks: true
+prompt_with_masks: false
 
 viz: false # visualize the first segmentation
 
