@@ -16,3 +16,4 @@ uv.lock
 .python-version
 outputs/*
 sam2/notebooks/*
+multirun/*
