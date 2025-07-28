@@ -545,7 +545,7 @@ def get_mask_from_points(points, img_segmenter, img_np, iou_threshold=0.5):
                                                multimask_output = False)
     masks = masks.squeeze(1).astype(bool)
     idx_keep = nms_masks(masks, scores.squeeze(), iou_threshold=iou_threshold)
-    return idx_keep
+    return idx_keep, masks[idx_keep]
 
 def compute_iou(mask1, mask2):
         intersection = np.logical_and(mask1, mask2).sum()

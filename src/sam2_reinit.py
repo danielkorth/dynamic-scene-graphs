@@ -31,7 +31,7 @@ def main(cfg):
     img = Image.open(first_image_path)
     img_np = np.array(img)
     
-    masks = mask_first_frame(img_np, auto_segmenter, viz=True)
+    masks = mask_first_frame(img_np, auto_segmenter, viz=False)
 
     # inital points and labels 
     # dict: obj_id -> points, labels
@@ -112,8 +112,10 @@ def main(cfg):
                 img_last_patch = Image.open(last_img_patch_path)
                 img_last_patch_np = np.array(img_last_patch)
                 all_points = np.vstack([new_regions[i]['points'] for i in range(len(new_regions))])
-                valids_idx = get_mask_from_points(all_points, img_segmenter, img_last_patch_np, iou_threshold=0.5)
+                valids_idx, valid_masks = get_mask_from_points(all_points, img_segmenter, img_last_patch_np, iou_threshold=0.5)
                 new_regions = [new_regions[i] for i in valids_idx]
+                for v_i, mask in enumerate(valid_masks):
+                    new_regions[v_i]['mask'] = mask
 
             # add new categories
             next_obj_id = max(obj_points.keys()) + 1
