@@ -57,7 +57,8 @@ def main(cfg):
         obj_points[i]['mask'] = mask['segmentation'].squeeze()
 
     # save the points image
-    save_points_image_cv2_obj_id(os.path.join(subsets[0], "000000.jpg"), obj_points, os.path.join(cfg.output_folder, "frame_0_obj_id.png"))
+    # save_points_image_cv2_obj_id(os.path.join(subsets[0], "000000.jpg"), obj_points, os.path.join(cfg.output_folder, "frame_0_obj_id.png"))
+    
     save_obj_points(obj_points, os.path.join(obj_points_dir, "obj_points_0.npy"))
 
     global_counter = 1
