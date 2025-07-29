@@ -17,16 +17,22 @@ class SceneGraph:
         return node_name in self.nodes
     
     def log_rerun(self, show_pct: bool = False, max_points: int = 5000):
-        edges = rr.LineStrips3D(strips=np.array([[edge.source.centroid, edge.target.centroid] for edge in self.edges]))
-        rr.log("centroids", rr.Points3D(positions=np.array([self.nodes[node_name].centroid for node_name in self.nodes]), colors=np.array([0, 0, 0]), radii=0.01))
+        # edges = rr.LineStrips3D(strips=np.array([[edge.source.centroid, edge.target.centroid] for edge in self.edges]))
+        # rr.log("world/edges", edges)
         for node_name in self.nodes:
             if show_pct:
-                rr.log(f"pcts/{node_name}", rr.Points3D(
+                rr.log(f"world/points/{node_name}", rr.Points3D(
                     # sample max_points points
                     positions=self.nodes[node_name].pct[np.random.choice(self.nodes[node_name].pct.shape[0], min(max_points, self.nodes[node_name].pct.shape[0]), replace=False)], 
-                    colors=self.nodes[node_name].color, 
-                    radii=0.003))
-        rr.log("edges", edges)
+                    radii=0.005,
+                    class_ids=np.array([self.nodes[node_name].id] * self.nodes[node_name].pct.shape[0]))
+                )
+            rr.log(f"world/centroids/{node_name}", rr.Points3D(
+                positions=self.nodes[node_name].centroid, 
+                radii=0.03,
+                class_ids=np.array([self.nodes[node_name].id] * self.nodes[node_name].pct.shape[0]))
+            )
+                
 
     def log_open3d(self):
         pass

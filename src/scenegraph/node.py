@@ -2,13 +2,15 @@ import numpy as np
 
 
 class Node:
-    def __init__(self, name: str, 
+    def __init__(self, 
+                 name: str, 
                  centroid: np.ndarray, 
                  color: np.ndarray = np.array([0, 0, 0]),
-                 radius: float = 0.01,
+                 radius: float = 0.003,
                  label: str = "",
                  pct: np.ndarray | None= None):
         self.name = name
+        self.id = int(name.split("_")[-1])
         self.centroid = centroid
         self.color = color
         self.radius = radius

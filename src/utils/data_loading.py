@@ -299,7 +299,7 @@ def load_everything(images_dir, obj_points_dir, max_frames=None, subsample=None)
         obj_points = load_obj_points(obj_points_file)
         data["obj_points"].append(obj_points)
         count += 1
-        if count > max_frames:
+        if max_frames > 0 and count > max_frames:
             break
 
     return data

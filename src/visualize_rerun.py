@@ -13,9 +13,9 @@ import hydra
 from omegaconf import DictConfig
 
 def aggregate_masks(obj_points):
-    mask = np.zeros(obj_points[0]['mask'].shape)
-    for i, obj_point in enumerate(obj_points.values()):
-        mask[obj_point['mask']] = i+1
+    mask = -1 * np.ones(obj_points[0]['mask'].shape)
+    for id, obj_point in obj_points.items():
+        mask[obj_point['mask']] = id
     return mask
 
 @hydra.main(config_path="../configs", config_name="sam2_reinit")
@@ -61,6 +61,23 @@ def main(cfg: DictConfig):
     print(f"Loaded {len(rgb_images)} RGB images and {len(depth_images)} depth images")
     print(f"Loaded {len(tvecs)} poses (translations: {len(tvecs)}, rotations: {len(rvecs)})")
 
+    # rr.log("/", rr.AnnotationContext([  
+    #     rr.AnnotationInfo(id=1, label="red", color=rr.Rgba32([255, 0, 0, 255])),  
+    #     rr.AnnotationInfo(id=2, label="green", color=rr.Rgba32([0, 255, 0, 255]))  
+    # ]), static=True)
+
+#     rr.log(
+#     "masks",  # Applies to all entities below "masks".
+#     rr.AnnotationContext(
+#         [
+#             rr.AnnotationInfo(id=0, label="Background"),
+#             rr.AnnotationInfo(id=1, label="Person", color=(255, 0, 0, 0)),
+#         ],
+#     ),
+#     static=True,
+# )
+    # rr.log("/", rr.AnnotationContext([(1, "red", (255, 0, 0)), (2, "green", (0, 255, 0))]), static=True)
+
     rr.log("world/camera", rr.ViewCoordinates.RDF)
 
     rr.log("world/camera/image", rr.Pinhole(
@@ -81,7 +98,7 @@ def main(cfg: DictConfig):
             translation=tvec,
         ))
         rr.log("world/camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
-        rr.log("world/camera/image/depth", rr.DepthImage(depth/1000.0))
+        rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000.0, depth_range=[0, 5000]))
         rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks(obj_points)))
 
         for obj_id, obj_point in obj_points.items():
