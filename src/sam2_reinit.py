@@ -110,8 +110,10 @@ def main(cfg):
         img_last_patch_np = np.array(img_last_patch)
 
         # Detect new regions
-        # new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
-        new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_last_patch_np)
+        if cfg.new_objects_fct == 'automask':
+            new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_last_patch_np)
+        else:
+            new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
 
         if len(new_regions) > 0:
             if new_regions[0]['mask'] is None and cfg.prompt_with_masks:
@@ -126,6 +128,7 @@ def main(cfg):
             
             if new_regions[0]['mask'] is not None:
                 obj_points, new_regions = solve_overlap(obj_points, new_regions)
+                # obj_points, new_regions = solve_overlap(obj_points, new_regions, viz_img=img_last_patch_np)
             # add new categories
             next_obj_id = max(obj_points.keys()) + 1
             for j, new_region in enumerate(new_regions):

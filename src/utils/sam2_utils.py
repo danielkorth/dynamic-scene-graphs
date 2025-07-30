@@ -12,13 +12,23 @@ from segment import SAM2Segmenter
 from scipy.ndimage import binary_erosion
 
 
-def show_mask(mask, ax, obj_id=None, random_color=False):
+def show_mask(mask, ax, obj_id=None, random_color=False, alpha=0.6):
+    """
+    Display a mask on the given matplotlib axis.
+
+    Args:
+        mask: 2D numpy array, mask to display.
+        ax: matplotlib axis to plot on.
+        obj_id: Optional, used to select color from colormap.
+        random_color: If True, use a random color.
+        alpha: Float in [0,1], alpha value for the mask overlay.
+    """
     if random_color:
-        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+        color = np.concatenate([np.random.random(3), np.array([alpha])], axis=0)
     else:
-        cmap = plt.get_cmap("tab10")
+        cmap = plt.get_cmap("tab20")
         cmap_idx = 0 if obj_id is None else obj_id
-        color = np.array([*cmap(cmap_idx)[:3], 0.6])
+        color = np.array([*cmap(cmap_idx%cmap.N)[:3], alpha])
     h, w = mask.shape[-2:]
     mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
     ax.imshow(mask_image)
@@ -789,7 +799,7 @@ def load_obj_points(filepath):
     print(f"Loaded obj_points from {filepath}")
     return obj_points
 
-def solve_overlap(obj_points, new_regions, containment_threshold=0.7, overlap_threshold=0.3):
+def solve_overlap(obj_points, new_regions, containment_threshold=0.7, overlap_threshold=0.3, viz_img=None):
     """
     Remove new regions that correspond to already masked objects.
     
@@ -798,16 +808,22 @@ def solve_overlap(obj_points, new_regions, containment_threshold=0.7, overlap_th
         new_regions: list of dicts with {'points': np.ndarray, 'labels': np.ndarray, 'mask': np.ndarray}
         containment_threshold: float, if old_mask is contained in new_mask by this ratio, keep old
         overlap_threshold: float, if IoU exceeds this, consider as overlap
+        viz_img: numpy array of the image to overlay masks on (optional)
     
     Returns:
         obj_points: updated obj_points dict
         new_regions: filtered list of new regions (removing overlapping ones)
     """
+    print(f"Solving overlap for {len(new_regions)} new regions")
     if not new_regions:
         return obj_points, new_regions
     
+    # Store original new_regions for visualization
+    original_new_regions = new_regions.copy()
+    
     # Filter new regions
     filtered_regions = []
+    removed_regions = []
     
     for new_region in new_regions:
         if new_region.get('mask') is None:
@@ -863,8 +879,94 @@ def solve_overlap(obj_points, new_regions, containment_threshold=0.7, overlap_th
         
         if should_keep:
             filtered_regions.append(new_region)
+        else:
+            removed_regions.append(new_region)
+    
+    # Visualize if viz_img is provided
+    if viz_img is not None:
+        visualize_solve_overlap_results(viz_img, obj_points, original_new_regions, filtered_regions, removed_regions)
     
     return obj_points, filtered_regions
+
+
+def visualize_solve_overlap_results(viz_img, obj_points, original_new_regions, filtered_regions, removed_regions):
+    """
+    Visualize the results of solve_overlap function.
+    
+    Args:
+        viz_img: numpy array of the image to overlay masks on
+        obj_points: dict mapping obj_id to {'points': [], 'labels': [], 'mask': np.ndarray}
+        original_new_regions: list of all new regions before filtering
+        filtered_regions: list of new regions after filtering
+        removed_regions: list of regions that were removed
+    """
+    import matplotlib.pyplot as plt
+    
+    # Create first figure with 3 subplots: Before, After, Removed
+    fig1, axes1 = plt.subplots(1, 3, figsize=(18, 6))
+    fig1.suptitle('Overlap Resolution Process', fontsize=16, fontweight='bold')
+    
+    # Helper function to overlay masks on image
+    def overlay_masks_on_image(img, masks, title, axes, color_offset=0, show_previous_masks=True):
+        ax = axes[color_offset]
+        ax.imshow(img)
+        
+        # Overlay existing object masks (from obj_points)
+        if show_previous_masks:
+            for obj_id, obj_info in obj_points.items():
+                if obj_info.get('mask') is not None:
+                    mask = np.asarray(obj_info['mask']).astype(bool)
+                    show_mask(mask, ax, obj_id=obj_id, random_color=False, alpha=0.4)
+        
+        # Overlay new region masks
+        for i, region in enumerate(masks):
+            if region.get('mask') is not None:
+                mask = np.asarray(region['mask']).astype(bool)
+                # Use different color scheme for new regions (offset by 100)
+                show_mask(mask, ax, obj_id=i+100, random_color=False, alpha=0.8)
+        
+        ax.set_title(f"{title}\n({len(masks)} new masks)")
+        ax.axis('off')
+    
+    # Before filtering
+    overlay_masks_on_image(viz_img, original_new_regions, "Before Overlap Resolution", axes1, 0)
+    
+    # After filtering
+    overlay_masks_on_image(viz_img, filtered_regions, "After Overlap Resolution", axes1, 1)
+    
+    # Removed masks
+    overlay_masks_on_image(viz_img, removed_regions, "Removed Masks", axes1, 2, show_previous_masks=False)
+    
+    plt.tight_layout()
+    
+    # Create second figure with 2 subplots: Previous Masks Only, New Masks Only
+    fig2, axes2 = plt.subplots(1, 2, figsize=(12, 6))
+    fig2.suptitle('Mask Comparison', fontsize=16, fontweight='bold')
+    
+    # Previous masks only
+    ax_prev = axes2[0]
+    ax_prev.imshow(viz_img)
+    for obj_id, obj_info in obj_points.items():
+        if obj_info.get('mask') is not None:
+            mask = np.asarray(obj_info['mask']).astype(bool)
+            show_mask(mask, ax_prev, obj_id=obj_id, random_color=False, alpha=0.6)
+    ax_prev.set_title(f"Previous Masks Only\n({len(obj_points)} existing masks)")
+    ax_prev.axis('off')
+    
+    # New masks only (before filtering)
+    ax_new = axes2[1]
+    ax_new.imshow(viz_img)
+    for i, region in enumerate(original_new_regions):
+        if region.get('mask') is not None:
+            mask = np.asarray(region['mask']).astype(bool)
+            show_mask(mask, ax_new, obj_id=i+100, random_color=False, alpha=0.8)
+    ax_new.set_title(f"New Masks Only\n({len(original_new_regions)} new masks)")
+    ax_new.axis('off')
+    
+    plt.tight_layout()
+    
+    # Show both figures
+    plt.show()
 
 def make_video_from_visualizations(output_folder, video_filename="final_video.mp4", fps=15):
 
