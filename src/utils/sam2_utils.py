@@ -721,6 +721,83 @@ def load_obj_points(filepath):
     print(f"Loaded obj_points from {filepath}")
     return obj_points
 
+def solve_overlap(obj_points, new_regions, containment_threshold=0.7, overlap_threshold=0.3):
+    """
+    Remove new regions that correspond to already masked objects.
+    
+    Args:
+        obj_points: dict mapping obj_id to {'points': [], 'labels': [], 'mask': np.ndarray}
+        new_regions: list of dicts with {'points': np.ndarray, 'labels': np.ndarray, 'mask': np.ndarray}
+        containment_threshold: float, if old_mask is contained in new_mask by this ratio, keep old
+        overlap_threshold: float, if IoU exceeds this, consider as overlap
+    
+    Returns:
+        obj_points: updated obj_points dict
+        new_regions: filtered list of new regions (removing overlapping ones)
+    """
+    if not new_regions:
+        return obj_points, new_regions
+    
+    # Filter new regions
+    filtered_regions = []
+    
+    for new_region in new_regions:
+        if new_region.get('mask') is None:
+            # If no mask, keep it (will be processed later)
+            filtered_regions.append(new_region)
+            continue
+            
+        new_mask = np.asarray(new_region['mask']).astype(bool)
+        new_area = new_mask.sum()
+        
+        should_keep = True
+        
+        for obj_id, obj_info in obj_points.items():
+            existing_mask = obj_info['mask']
+            if existing_mask is None:
+                continue
+            existing_area = existing_mask.sum()
+            
+            # Compute intersection and union
+            intersection = np.logical_and(new_mask, existing_mask)
+            union = np.logical_or(new_mask, existing_mask)
+            intersection_area = intersection.sum()
+            union_area = union.sum()
+            
+            if union_area == 0:
+                continue
+                
+            iou = intersection_area / union_area
+            
+            if iou > overlap_threshold:
+                # Check containment relationships
+                # Old mask contained in new mask
+                old_in_new_ratio = intersection_area / existing_area
+                
+                # New mask contained in old mask  
+                new_in_old_ratio = intersection_area / new_area
+                
+                # If old mask is mostly contained in new mask, keep the old one
+                if old_in_new_ratio > containment_threshold:
+                    should_keep = False
+                    break
+                    
+                # If new mask is mostly contained in old mask, keep the old one
+                elif new_in_old_ratio > containment_threshold:
+                    should_keep = False
+                    break
+                    
+                # If neither is clearly contained but there's significant overlap,
+                # prefer the existing mask (keep the old one)
+                elif iou > 0.8:
+                    should_keep = False
+                    break
+        
+        if should_keep:
+            filtered_regions.append(new_region)
+    
+    return obj_points, filtered_regions
+
 def make_video_from_visualizations(output_folder, video_filename="final_video.mp4", fps=15):
 
     """

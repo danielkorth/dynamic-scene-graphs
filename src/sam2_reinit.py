@@ -1,5 +1,5 @@
 from utils.sam2_utils import (create_overlapping_subsets, detect_with_furthest, is_new_obj, mask_first_frame, 
-                                save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations, detect_with_cc, get_mask_from_points, save_obj_points)
+                                save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations, detect_with_cc, get_mask_from_points, save_obj_points, solve_overlap)
 from sam2.build_sam import build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from segment import SAM2Segmenter
@@ -107,7 +107,7 @@ def main(cfg):
         # Detect new regions
         new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
         if len(new_regions) > 0:
-            if cfg.prompt_with_masks:
+            if new_regions[0]['mask'] is None and cfg.prompt_with_masks:
                 last_img_patch_path = subsets[i] + f"/{len(video_segments)-1:06d}.jpg"
                 img_last_patch = Image.open(last_img_patch_path)
                 img_last_patch_np = np.array(img_last_patch)
@@ -116,7 +116,9 @@ def main(cfg):
                 new_regions = [new_regions[i] for i in valids_idx]
                 for v_i, mask in enumerate(valid_masks):
                     new_regions[v_i]['mask'] = mask
-
+            
+            if new_regions[0]['mask'] is not None:
+                obj_points, new_regions = solve_overlap(obj_points, new_regions)
             # add new categories
             next_obj_id = max(obj_points.keys()) + 1
             for j, new_region in enumerate(new_regions):
