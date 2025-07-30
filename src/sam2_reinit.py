@@ -33,17 +33,6 @@ def main(cfg):
     
     masks = mask_first_frame(img_np, auto_segmenter, viz=False)
 
-    ### TESTING SPACE
-    # accumulate masks
-    full_mask = np.zeros_like(masks[0]['segmentation'])
-    for mask in masks:
-        full_mask += mask['segmentation']
-
-    # detect new regions
-    new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_np, viz=True)
-
-    ### END TESTING SPACE
-
     # inital points and labels 
     # dict: obj_id -> points, labels
     # defaultdict: obj_id -> points, labels
@@ -127,8 +116,10 @@ def main(cfg):
         if len(new_regions) > 0:
             if cfg.prompt_with_masks:
                 all_points = np.vstack([new_regions[i]['points'] for i in range(len(new_regions))])
-                valids_idx = get_mask_from_points(all_points, img_segmenter, img_last_patch_np, iou_threshold=0.5)
+                valids_idx, valid_masks = get_mask_from_points(all_points, img_segmenter, img_last_patch_np, iou_threshold=0.5)
                 new_regions = [new_regions[i] for i in valids_idx]
+                for v_i, mask in enumerate(valid_masks):
+                    new_regions[v_i]['mask'] = mask
 
             # add new categories
             next_obj_id = max(obj_points.keys()) + 1
