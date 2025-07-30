@@ -1,7 +1,7 @@
 defaults:
   - paths: default
   - sam: tiny
-  - new_objects_fct: automask # farthest_point #sampling_cc
+  - new_objects_fct:  farthest_point #sampling_cc
   - _self_
 
 # needs to be provided
@@ -25,7 +25,7 @@ chunk_size: 10 # chunk size of overlapping subsets
 overlap: 1 # overlap between chunks
 
 # Prompt with masks
-prompt_with_masks: false
+prompt_with_masks: true
 
 viz: false # visualize the first segmentation
 

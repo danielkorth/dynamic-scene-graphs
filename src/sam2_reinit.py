@@ -1,5 +1,5 @@
 from utils.sam2_utils import (create_overlapping_subsets, detect_with_furthest, is_new_obj, mask_first_frame, 
-                                save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations, detect_with_cc, get_mask_from_points, save_obj_points)
+                                save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations, detect_with_cc, get_mask_from_points, save_obj_points, solve_overlap)
 from sam2.build_sam import build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from segment import SAM2Segmenter
@@ -32,17 +32,6 @@ def main(cfg):
     img_np = np.array(img)
     
     masks = mask_first_frame(img_np, auto_segmenter, viz=False)
-
-    ### TESTING SPACE
-    # accumulate masks
-    full_mask = np.zeros_like(masks[0]['segmentation'])
-    for mask in masks:
-        full_mask += mask['segmentation']
-
-    # detect new regions
-    new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_np, viz=True)
-
-    ### END TESTING SPACE
 
     # inital points and labels 
     # dict: obj_id -> points, labels
@@ -121,15 +110,25 @@ def main(cfg):
         img_last_patch_np = np.array(img_last_patch)
 
         # Detect new regions
-        # new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
-        new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_last_patch_np)
+        if cfg.new_objects_fct == 'automask':
+            new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_last_patch_np)
+        else:
+            new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
 
         if len(new_regions) > 0:
-            if cfg.prompt_with_masks:
+            if new_regions[0]['mask'] is None and cfg.prompt_with_masks:
+                last_img_patch_path = subsets[i] + f"/{len(video_segments)-1:06d}.jpg"
+                img_last_patch = Image.open(last_img_patch_path)
+                img_last_patch_np = np.array(img_last_patch)
                 all_points = np.vstack([new_regions[i]['points'] for i in range(len(new_regions))])
-                valids_idx = get_mask_from_points(all_points, img_segmenter, img_last_patch_np, iou_threshold=0.5)
+                valids_idx, valid_masks = get_mask_from_points(all_points, img_segmenter, img_last_patch_np, iou_threshold=0.5)
                 new_regions = [new_regions[i] for i in valids_idx]
-
+                for v_i, mask in enumerate(valid_masks):
+                    new_regions[v_i]['mask'] = mask
+            
+            if new_regions[0]['mask'] is not None:
+                obj_points, new_regions = solve_overlap(obj_points, new_regions)
+                # obj_points, new_regions = solve_overlap(obj_points, new_regions, viz_img=img_last_patch_np)
             # add new categories
             next_obj_id = max(obj_points.keys()) + 1
             for j, new_region in enumerate(new_regions):
