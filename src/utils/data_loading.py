@@ -48,9 +48,12 @@ def load_poses(path, max_frames=None, subsample=None, load_open3d=False):
 
     if load_open3d:
         rotations[:, 1] = -rotations[:, 1]
+    else:
+        rotations = -rotations
+    
     translations[:, 2] = -translations[:, 2]
     
-    return translations, -rotations
+    return translations, rotations
 
 def load_colmap_poses(path, image_list=None, max_frames=None, subsample=None):
     """
