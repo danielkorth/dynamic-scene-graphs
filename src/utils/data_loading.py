@@ -6,7 +6,7 @@ import glob
 from tqdm import tqdm
 from utils.sam2_utils import load_obj_points
 
-def load_poses(path, max_frames=None, subsample=None):
+def load_poses(path, max_frames=None, subsample=None, load_open3d=False):
     """Load poses from a CSV file with format: timestamp,tx,ty,tz,rx,ry,rz
     Format: Cam2World
     
@@ -45,6 +45,10 @@ def load_poses(path, max_frames=None, subsample=None):
     if max_frames is not None:
         translations = translations[:max_frames]
         rotations = rotations[:max_frames]
+
+    if load_open3d:
+        rotations[:, 1] = -rotations[:, 1]
+    translations[:, 2] = -translations[:, 2]
     
     return translations, -rotations
 
@@ -275,7 +279,7 @@ def load_all_rgb_images(images_dir, max_frames=None, subsample=None):
     
     return np.array(rgb_images)
 
-def load_everything(images_dir, obj_points_dir, max_frames=None, subsample=None):
+def load_everything(images_dir, obj_points_dir=None, max_frames=None, subsample=None):
     # calc number of images
     rgb_pattern = os.path.join(images_dir, "left*.png")
     rgb_files = sorted(glob.glob(rgb_pattern))
@@ -295,9 +299,12 @@ def load_everything(images_dir, obj_points_dir, max_frames=None, subsample=None)
         depth_image = cv2.imread(depth_file, cv2.IMREAD_UNCHANGED)
         data["depth"].append(depth_image)
         # obj_points
-        obj_points_file = os.path.join(obj_points_dir, f"obj_points_{i}.npy")
-        obj_points = load_obj_points(obj_points_file)
-        data["obj_points"].append(obj_points)
+        if obj_points_dir is not None:
+            obj_points_file = os.path.join(obj_points_dir, f"obj_points_{i}.npy")
+            obj_points = load_obj_points(obj_points_file)
+            data["obj_points"].append(obj_points)
+        else:
+            data["obj_points"].append(None)
         count += 1
         if max_frames > 0 and count > max_frames:
             break

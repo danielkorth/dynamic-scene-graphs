@@ -13,7 +13,7 @@ def main(cfg):
     # load and subsample images
     subsets = create_overlapping_subsets(cfg.images_folder, cfg.output_folder, cfg.chunk_size, cfg.overlap, cfg.subsample)
 
-    obj_points_dir = os.path.join(cfg.output_folder, "obj_points_history")
+    obj_points_dir = os.path.join(cfg.source_folder, "obj_points_history")
     os.makedirs(obj_points_dir, exist_ok=True)
 
     # load images
