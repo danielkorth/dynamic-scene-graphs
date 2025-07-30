@@ -46,7 +46,8 @@ def main(cfg):
         obj_points[i]['mask'] = mask['segmentation'].squeeze()
 
     # save the points image
-    save_points_image_cv2_obj_id(os.path.join(subsets[0], "000000.jpg"), obj_points, os.path.join(cfg.output_folder, "frame_0_obj_id.png"))
+    # save_points_image_cv2_obj_id(os.path.join(subsets[0], "000000.jpg"), obj_points, os.path.join(cfg.output_folder, "frame_0_obj_id.png"))
+    
     save_obj_points(obj_points, os.path.join(obj_points_dir, "obj_points_0.npy"))
 
     global_counter = 1
@@ -104,8 +105,14 @@ def main(cfg):
         for obj_id, mask in video_segments[len(video_segments) - 1].items():
             full_mask += mask
 
+        last_img_patch_path = subsets[i] + f"/{len(video_segments)-1:06d}.jpg"
+        img_last_patch = Image.open(last_img_patch_path)
+        img_last_patch_np = np.array(img_last_patch)
+
         # Detect new regions
-        new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
+        # new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
+        new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_last_patch_np)
+
         if len(new_regions) > 0:
             if new_regions[0]['mask'] is None and cfg.prompt_with_masks:
                 last_img_patch_path = subsets[i] + f"/{len(video_segments)-1:06d}.jpg"
@@ -124,13 +131,13 @@ def main(cfg):
             for j, new_region in enumerate(new_regions):
                 if new_region['mask'] is None or is_new_obj(new_region['mask'], obj_points, iou_threshold=0.5):
                     new_obj_id = next_obj_id + j
-                    obj_points[new_obj_id]['points'] = new_region['points'].astype(np.float32).reshape(-1, 2)
-                    obj_points[new_obj_id]['labels'] = new_region['labels']
+                    obj_points[new_obj_id]['points'] = new_region['points'].astype(np.float32).reshape(-1, 2) if new_region['points'] is not None else None
+                    obj_points[new_obj_id]['labels'] = new_region['labels'] if new_region['labels'] is not None else None
                     obj_points[new_obj_id]['mask'] = new_region['mask']
                 else:
                     print(f"New region {j} is not new")
 
-        save_points_image_cv2_obj_id(os.path.join(subsets[i], f"{len(video_segments)-1:06d}.jpg"), obj_points, os.path.join(cfg.output_folder, f"frame_{i}_obj_id_new.png"))
+        # save_points_image_cv2_obj_id(os.path.join(subsets[i], f"{len(video_segments)-1:06d}.jpg"), obj_points, os.path.join(cfg.output_folder, f"frame_{i}_obj_id_new.png"))
 
     # At the end of main, after all processing:
     video_fps = getattr(cfg, 'video_fps', 15)

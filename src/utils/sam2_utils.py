@@ -611,6 +611,74 @@ def is_new_obj(new_mask, obj_points, iou_threshold=0.5):
             return False
     return True
 
+def detect_with_automask(full_mask, **kwargs):
+    mask_generator = kwargs['mask_generator']
+    import numpy as np
+    from sam2.utils.amg import build_all_layer_point_grids
+
+    def mask_points(points, mask):
+        """
+        Filters points (normalized [0,1]) by a boolean mask of shape (H, W).
+
+        Args:
+            points: (N, 2) array of (x, y) in [0, 1]
+            mask: (H, W) boolean array
+
+        Returns:
+            (M, 2) array of points where mask is True
+        """
+        H, W = mask.shape
+        x = points[:, 0]
+        y = points[:, 1]
+        j = np.clip((x * W).astype(int), 0, W - 1)
+        i = np.clip((y * H).astype(int), 0, H - 1)
+        mask_values = mask[i, j]
+        return points[mask_values]
+    
+    # enlarge mask
+    full_mask = get_dilated_mask(np.squeeze(full_mask), buffer_radius=10)
+    point_grid = build_all_layer_point_grids(n_per_side=64, n_layers=1, scale_per_layer=1)
+    point_grid = [mask_points(pg, ~full_mask) for pg in point_grid]
+    new_points = mask_points(point_grid[0], ~full_mask)
+
+    # # visualize the point grid over the image
+    # if kwargs['viz']:
+    #     # rescale points
+    #     new_points_viz = new_points * np.array([kwargs['image'].shape[1], kwargs['image'].shape[0]])
+    #     fig, ax = plt.subplots()
+    #     ax.imshow(kwargs['image'])
+    #     ax.scatter(new_points_viz[:, 0], new_points_viz[:, 1], color='red', marker='*', s=20, edgecolor='white', linewidth=1.25)
+    #     ax.axis('off')
+    #     ax.set_title(f"Point grid overlaid on frame {0}")
+    #     plt.tight_layout()
+    #     plt.show()
+
+    old_point_grid = mask_generator.point_grids[0]
+    mask_generator.point_grids = [new_points]
+    masks = mask_generator.generate(kwargs['image'])
+    mask_generator.point_grids = [old_point_grid]
+
+    # plt imshow the image + masks
+    # if kwargs['viz']:
+    #     fig, ax = plt.subplots()
+    #     ax.imshow(kwargs['image'])
+    #     for i, mask in enumerate(masks):
+    #         show_mask(mask['segmentation'], ax, obj_id=i, random_color=False)
+    #     ax.axis('off')
+    #     ax.set_title(f"Masks overlaid on frame {0}")
+    #     plt.tight_layout()
+    #     plt.show()
+    
+        # Create the return list of dicts
+    return_list = []
+    for i in range(len(masks)):
+        return_list.append({
+            'points': None,
+            'labels': None,
+            'mask': masks[i]['segmentation']
+            })
+    return return_list
+
 # Save results using OpenCV for speed
 def save_sam_cv2(video_segments, frames_dir, masks_dir, vis_dir):
     from utils.tools import get_color_for_id
