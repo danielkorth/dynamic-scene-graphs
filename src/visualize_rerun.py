@@ -122,7 +122,16 @@ def main(cfg: DictConfig):
 
         graph.log_rerun(show_pct=True)
 
+        # LOG CAMERA TRAJECTORY
+        if i > 0:
+            line_strips.append(np.array([tvecs[i-1], tvecs[i]]))
+            rr.log("world/trajectory", rr.LineStrips3D(
+                strips=np.array(line_strips),
+                colors=np.array([[255, 0, 0, 255]] * len(line_strips)),
+            ))
+
         rr.set_time(timeline="world", sequence=i)
+
 
 if __name__ == "__main__":
     main()

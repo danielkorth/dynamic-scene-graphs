@@ -31,7 +31,7 @@ def main(cfg):
     img = Image.open(first_image_path)
     img_np = np.array(img)
     
-    masks = mask_first_frame(img_np, auto_segmenter, viz=True)
+    masks = mask_first_frame(img_np, auto_segmenter, viz=False)
 
     ### TESTING SPACE
     # accumulate masks
