@@ -67,8 +67,7 @@ def parse_args(init, opt):
 
 def main(opt):
     init_params = sl.InitParameters(camera_resolution=sl.RESOLUTION.HD720,
-                                 coordinate_units=sl.UNIT.METER,
-                                 coordinate_system=sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP)
+                                 coordinate_units=sl.UNIT.METER)
     parse_args(init_params, opt)
     init_params.depth_mode = sl.DEPTH_MODE.NEURAL
 

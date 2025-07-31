@@ -92,6 +92,8 @@ def main(cfg: DictConfig):
     from scenegraph.node import Node
     graph = SceneGraph()
 
+    line_strips = []
+
     for i, (rgb, depth, tvec, rvec, obj_points) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs, obj_points)):
         rr.log("world/camera", rr.Transform3D(
             mat3x3=Rotation.from_rotvec(rvec).as_matrix(),
