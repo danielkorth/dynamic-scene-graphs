@@ -69,7 +69,7 @@ def main(opt):
     init_params = sl.InitParameters(camera_resolution=sl.RESOLUTION.HD720,
                                  coordinate_units=sl.UNIT.METER)
     parse_args(init_params, opt)
-    init_params.depth_mode = sl.DEPTH_MODE.NEURAL
+    init_params.depth_mode = sl.DEPTH_MODE.ULTRA
 
     zed = sl.Camera()
     status = zed.open(init_params)
