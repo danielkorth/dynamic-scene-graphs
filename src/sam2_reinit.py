@@ -110,7 +110,7 @@ def main(cfg):
         img_last_patch_np = np.array(img_last_patch)
 
         # Detect new regions
-        if cfg.new_objects_fct == 'automask':
+        if 'automask' in cfg.new_objects_fct["_target_"]:
             new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_last_patch_np)
         else:
             new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
