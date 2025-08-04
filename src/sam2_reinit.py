@@ -1,20 +1,34 @@
-from utils.sam2_utils import (create_overlapping_subsets, detect_with_furthest, is_new_obj, mask_first_frame, 
+from util.sam2_utils import (create_overlapping_subsets, detect_with_furthest, is_new_obj, mask_first_frame, 
                                 save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations, detect_with_cc, get_mask_from_points, save_obj_points, solve_overlap)
 from sam2.build_sam import build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from segment import SAM2Segmenter
+from features.dinov2 import DINOv2
+from features.salad import SALAD
 import hydra
 import os
 from PIL import Image
 import numpy as np
+import supervision as sv
+from supervision.detection.utils.converters import mask_to_xyxy
+import cv2
 
 @hydra.main(config_path="../configs", config_name="sam2_reinit.yaml")
 def main(cfg):
     # load and subsample images
+    import os
+    original_cwd = hydra.utils.get_original_cwd()
+    print(original_cwd)
+    os.chdir(original_cwd)
+    print(os.getcwd())
     subsets = create_overlapping_subsets(cfg.images_folder, cfg.output_folder, cfg.chunk_size, cfg.overlap, cfg.subsample)
 
     obj_points_dir = os.path.join(cfg.source_folder, "obj_points_history")
     os.makedirs(obj_points_dir, exist_ok=True)
+
+    # Initialize DINOv2 for feature extraction
+    dinov2_extractor = DINOv2()
+    salad_extractor = SALAD()
 
     # load images
     predictor = build_sam2_video_predictor(
@@ -33,17 +47,32 @@ def main(cfg):
     
     masks = mask_first_frame(img_np, auto_segmenter, viz=False)
 
+    # create crop folder
+    crop_dir = os.path.join(cfg.output_folder, "crop")
+    os.makedirs(crop_dir, exist_ok=True)
+
     # inital points and labels 
     # dict: obj_id -> points, labels
     # defaultdict: obj_id -> points, labels
     from collections import defaultdict
-    obj_points = defaultdict(lambda: {'points': [], 'labels': [], 'mask': None})
+    obj_points = defaultdict(lambda: {'points': [], 'labels': [], 'mask': None, 'crop': None, 'dinov2_features': None, 'salad_features': None})
     for i, mask in enumerate(masks):
         points = mask['point_coords']
         labels = np.ones(len(points), dtype=np.int32)
         obj_points[i]['points'] = points
         obj_points[i]['labels'] = labels
         obj_points[i]['mask'] = mask['segmentation'].squeeze()
+
+        cropped_image = sv.crop_image(img_np, mask_to_xyxy(mask['segmentation'][None, ...])) 
+        crop_path = os.path.join(crop_dir, f"cropped_image_{i}.jpg")
+        cv2.imwrite(crop_path, cropped_image)
+        obj_points[i]['crop'] = cropped_image
+        
+        # Extract DINOv2 features immediately
+        dinov2_features = dinov2_extractor.extract_features(crop_path)
+        obj_points[i]['dinov2_features'] = dinov2_features.cpu().numpy()
+        salad_features = salad_extractor.extract_features(crop_path)
+        obj_points[i]['salad_features'] = salad_features.cpu().numpy()
 
     # save the points image
     # save_points_image_cv2_obj_id(os.path.join(subsets[0], "000000.jpg"), obj_points, os.path.join(cfg.output_folder, "frame_0_obj_id.png"))
@@ -129,6 +158,8 @@ def main(cfg):
             if new_regions[0]['mask'] is not None:
                 obj_points, new_regions = solve_overlap(obj_points, new_regions)
                 # obj_points, new_regions = solve_overlap(obj_points, new_regions, viz_img=img_last_patch_np)
+
+
             # add new categories
             next_obj_id = max(obj_points.keys()) + 1
             for j, new_region in enumerate(new_regions):
@@ -137,6 +168,16 @@ def main(cfg):
                     obj_points[new_obj_id]['points'] = new_region['points'].astype(np.float32).reshape(-1, 2) if new_region['points'] is not None else None
                     obj_points[new_obj_id]['labels'] = new_region['labels'] if new_region['labels'] is not None else None
                     obj_points[new_obj_id]['mask'] = new_region['mask']
+                    obj_points[new_obj_id]['crop'] = sv.crop_image(img_last_patch_np, mask_to_xyxy(new_region['mask'][None, ...]))
+                    crop_path = os.path.join(crop_dir, f"cropped_image_{new_obj_id}.jpg")
+                    cv2.imwrite(crop_path, obj_points[new_obj_id]['crop'])
+
+                    # Extract DINOv2 features immediately for new objects
+                    dinov2_features = dinov2_extractor.extract_features(crop_path)
+                    obj_points[new_obj_id]['dinov2_features'] = dinov2_features.cpu().numpy()
+                    salad_features = salad_extractor.extract_features(crop_path)
+                    obj_points[new_obj_id]['salad_features'] = salad_features.cpu().numpy()
+
                 else:
                     print(f"New region {j} is not new")
 

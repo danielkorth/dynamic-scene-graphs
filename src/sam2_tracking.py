@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 # SAM2 imports
 from sam2.build_sam import build_sam2_video_predictor
-from utils.sam2_utils import (mask_first_frame_interactive, save_sam, 
+from util.sam2_utils import (mask_first_frame_interactive, save_sam, 
                               propagate_video_plain, mask_first_frame)
 from segment import SAM2Segmenter
 
@@ -242,7 +242,7 @@ def save_sam_custom(frame_names, frame_nums, video_segments, video_folder, masks
     Custom save function that writes masks and visualizations to separate directories.
     Uses OpenCV for fast image processing and saving.
     """
-    from utils.tools import get_color_for_id
+    from util.tools import get_color_for_id
     
     for out_frame_idx in tqdm(range(len(frame_names)), desc="Saving results"):
         frame_path = os.path.join(video_folder, frame_names[out_frame_idx])

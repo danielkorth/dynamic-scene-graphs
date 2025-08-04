@@ -624,7 +624,7 @@ def is_new_obj(new_mask, obj_points, iou_threshold=0.5):
 def detect_with_automask(full_mask, **kwargs):
     mask_generator = kwargs['mask_generator']
     import numpy as np
-    from sam2.utils.amg import build_all_layer_point_grids
+    from sam2.util.amg import build_all_layer_point_grids
 
     def mask_points(points, mask):
         """
@@ -691,7 +691,7 @@ def detect_with_automask(full_mask, **kwargs):
 
 # Save results using OpenCV for speed
 def save_sam_cv2(video_segments, frames_dir, masks_dir, vis_dir):
-    from utils.tools import get_color_for_id
+    from util.tools import get_color_for_id
     os.makedirs(masks_dir, exist_ok=True)
     os.makedirs(vis_dir, exist_ok=True)
     for out_frame_idx in video_segments.keys():

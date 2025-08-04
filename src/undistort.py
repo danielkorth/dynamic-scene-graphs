@@ -23,7 +23,7 @@ from omegaconf import DictConfig
 
 # Add src to path to import utilities
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.utils.data_loading import load_camera_intrinsics, get_camera_matrix, get_distortion_coeffs
+from src.util.data_loading import load_camera_intrinsics, get_camera_matrix, get_distortion_coeffs
 
 
 def find_image_files(input_dir):

@@ -1,13 +1,13 @@
 from pathlib import Path
 import argparse
 import rerun as rr
-from utils.colmap_utils import load_colmap_poses
-from utils.data_loading import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, load_all_masks, get_camera_matrix, get_distortion_coeffs, load_all_points
-from utils.rerun import setup_blueprint
-from utils.tools import get_color_for_id
+from util.colmap_util import load_colmap_poses
+from util.data_loading import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, load_all_masks, get_camera_matrix, get_distortion_coeffs, load_all_points
+from util.rerun import setup_blueprint
+from util.tools import get_color_for_id
 import numpy as np
 from scipy.spatial.transform import Rotation
-from utils.cv2_utils import unproject_image
+from util.cv2_util import unproject_image
 import time
 import hydra
 from omegaconf import DictConfig
@@ -48,7 +48,7 @@ def main(cfg: DictConfig):
     # K = get_camera_matrix(intrinsics)
     # dist = get_distortion_coeffs(intrinsics)
 
-    from utils.data_loading import load_everything
+    from util.data_loading import load_everything
     data = load_everything(cfg.images_folder, cfg.obj_points_dir, max_frames=cfg.max_frames, subsample=cfg.subsample)
 
     rgb_images = data["rgb"]

@@ -4,7 +4,7 @@ import cv2
 import os
 import glob
 from tqdm import tqdm
-from utils.sam2_utils import load_obj_points
+from util.sam2_utils import load_obj_points
 
 def load_poses(path, max_frames=None, subsample=None, load_open3d=False):
     """Load poses from a CSV file with format: timestamp,tx,ty,tz,rx,ry,rz
@@ -484,7 +484,7 @@ def load_all_points(points_dir, max_frames=None, subsample=None):
         points_frames: list of dicts, where each dict is an obj_points structure
     """
     import re
-    from utils.sam2_utils import load_obj_points
+    from util.sam2_utils import load_obj_points
     
     points_pattern = os.path.join(points_dir, "obj_points_*.npy")
     points_files = glob.glob(points_pattern)
