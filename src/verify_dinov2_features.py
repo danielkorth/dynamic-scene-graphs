@@ -4,33 +4,41 @@ import glob
 import matplotlib.pyplot as plt
 import seaborn as sns
 from PIL import Image
-import torch
 from sklearn.metrics.pairwise import cosine_similarity
 import tempfile
 import shutil
 
-def load_obj_points_file(obj_points_file, max_objects=10):
+# No need for feature extractors - features are pre-stored
+
+def load_obj_points_file(obj_points_file, max_objects=10, feature_type='dinov2'):
     """
-    Load a single obj_points file.
+    Load a single obj_points file with specified pre-computed features.
     
     Args:
         obj_points_file (str): Path to obj_points file
         max_objects (int): Maximum number of objects to load (randomly sampled if more). If None, load all.
+        feature_type (str): Type of features to use ('dinov2' or 'salad')
         
     Returns:
-        dict: Dictionary mapping obj_id to crop image and dinov2_features
+        dict: Dictionary mapping obj_id to crop image and features
     """
     obj_data = {}
     
     print(f"Loading obj_points file: {obj_points_file}")
+    print(f"Feature type: {feature_type}")
     
     obj_points = np.load(obj_points_file, allow_pickle=True).item()
     
-    # Collect all objects with DINOv2 features
+    # Determine feature key name
+    feature_key = f'{feature_type}_features'
+    
+    # Collect all objects with the specified features
     valid_objects = []
     for obj_id, data in obj_points.items():
-        if 'dinov2_features' in data and data['dinov2_features'] is not None:
+        if feature_key in data and data[feature_key] is not None:
             valid_objects.append((obj_id, data))
+    
+    print(f"Found {len(valid_objects)} objects with {feature_type.upper()} features")
     
     # Randomly sample if we have more than max_objects (only if max_objects is specified)
     if max_objects is not None and len(valid_objects) > max_objects:
@@ -45,22 +53,23 @@ def load_obj_points_file(obj_points_file, max_objects=10):
         
         obj_data[unique_key] = {
             'crop': data['crop'],
-            'dinov2_features': data['dinov2_features'],
+            'features': data[feature_key],
             'obj_id': obj_id
         }
     
-    print(f"Loaded {len(obj_data)} objects with DINOv2 features")
+    print(f"Loaded {len(obj_data)} objects with {feature_type.upper()} features")
     return obj_data
 
-def load_obj_points_history(obj_points_dir):
+def load_obj_points_history(obj_points_dir, feature_type='dinov2'):
     """
-    Load all obj_points files from the history folder.
+    Load all obj_points files from the history folder with specified pre-computed features.
     
     Args:
         obj_points_dir (str): Path to obj_points_history folder
+        feature_type (str): Type of features to use ('dinov2' or 'salad')
         
     Returns:
-        dict: Dictionary mapping obj_id to crop image and dinov2_features
+        dict: Dictionary mapping obj_id to crop image and features
     """
     obj_data = {}
     
@@ -69,28 +78,32 @@ def load_obj_points_history(obj_points_dir):
     obj_points_files.sort()
     
     print(f"Found {len(obj_points_files)} obj_points files")
+    print(f"Feature type: {feature_type}")
+    
+    # Determine feature key name
+    feature_key = f'{feature_type}_features'
     
     for file_path in obj_points_files:
         obj_points = np.load(file_path, allow_pickle=True).item()
         
         for obj_id, data in obj_points.items():
-            if 'dinov2_features' in data and data['dinov2_features'] is not None:
+            if feature_key in data and data[feature_key] is not None:
                 # Create unique key for each object across time
                 unique_key = f"obj_{obj_id}_frame_{os.path.basename(file_path).split('_')[-1].split('.')[0]}"
                 
                 obj_data[unique_key] = {
                     'crop': data['crop'],
-                    'dinov2_features': data['dinov2_features'],
+                    'features': data[feature_key],
                     'obj_id': obj_id,
                     'frame': os.path.basename(file_path).split('_')[-1].split('.')[0]
                 }
     
-    print(f"Loaded {len(obj_data)} objects with DINOv2 features")
+    print(f"Loaded {len(obj_data)} objects with {feature_type.upper()} features")
     return obj_data
 
 def calculate_similarity_matrix(obj_data):
     """
-    Calculate cosine similarity matrix between all DINOv2 features.
+    Calculate cosine similarity matrix between all features.
     
     Args:
         obj_data (dict): Dictionary of object data with features
@@ -100,7 +113,7 @@ def calculate_similarity_matrix(obj_data):
     """
     # Extract features and keys
     object_keys = list(obj_data.keys())
-    features = np.array([obj_data[key]['dinov2_features'].flatten() for key in object_keys])
+    features = np.array([obj_data[key]['features'].flatten() for key in object_keys])
     
     # Calculate cosine similarity
     similarity_matrix = cosine_similarity(features)
@@ -122,8 +135,8 @@ def calculate_cross_similarity_matrix(obj_data1, obj_data2):
     keys1 = list(obj_data1.keys())
     keys2 = list(obj_data2.keys())
     
-    features1 = np.array([obj_data1[key]['dinov2_features'].flatten() for key in keys1])
-    features2 = np.array([obj_data2[key]['dinov2_features'].flatten() for key in keys2])
+    features1 = np.array([obj_data1[key]['features'].flatten() for key in keys1])
+    features2 = np.array([obj_data2[key]['features'].flatten() for key in keys2])
     
     # Calculate cross-similarity matrix (file1 objects vs file2 objects)
     cross_similarity_matrix = cosine_similarity(features1, features2)
@@ -220,7 +233,7 @@ def create_similarity_visualization(similarity_matrix, object_keys, obj_data, ou
                 xticklabels=[f"obj_{obj_data[key]['obj_id']}" for key in object_keys],
                 yticklabels=[f"obj_{obj_data[key]['obj_id']}" for key in object_keys],
                 annot=True, fmt='.3f', cmap='RdYlBu_r', center=0.5)
-    plt.title('DINOv2 Feature Similarity Matrix')
+    plt.title('Feature Similarity Matrix')
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'similarity_heatmap.png'), dpi=150, bbox_inches='tight')
     plt.close()
@@ -282,7 +295,7 @@ def create_cross_similarity_visualization(cross_similarity_matrix, keys1, keys2,
                 xticklabels=[f"File2_obj_{obj_data2[key]['obj_id']}" for key in keys2],
                 yticklabels=[f"File1_obj_{obj_data1[key]['obj_id']}" for key in keys1],
                 annot=True, fmt='.3f', cmap='RdYlBu_r', center=0.5)
-    plt.title('Cross-File DINOv2 Feature Similarity Matrix\n(File1 objects vs File2 objects)')
+    plt.title('Cross-File Feature Similarity Matrix\n(File1 objects vs File2 objects)')
     plt.xlabel('File 2 Objects')
     plt.ylabel('File 1 Objects')
     plt.xticks(rotation=45, ha='right')
@@ -372,13 +385,15 @@ def create_cross_similarity_visualization(cross_similarity_matrix, keys1, keys2,
 def main():
     import argparse
     
-    parser = argparse.ArgumentParser(description='Verify DINOv2 features by calculating similarity matrix')
+    parser = argparse.ArgumentParser(description='Verify features by calculating similarity matrix')
     parser.add_argument('input_path', type=str, help='Path to obj_points_history folder or specific obj_points file')
     parser.add_argument('--output_dir', type=str, default=None, help='Output directory for visualizations')
     parser.add_argument('--single_file', action='store_true', help='Treat input as a single obj_points file instead of a directory')
     parser.add_argument('--file2', type=str, default=None, help='Second obj_points file for cross-file similarity comparison')
     parser.add_argument('--max_objects', type=int, default=None, help='Maximum number of objects to load from each file')
     parser.add_argument('--top_k', type=int, default=10, help='Number of top similar pairs to show in cross-file comparison')
+    parser.add_argument('--feature_type', type=str, default='dinov2', choices=['dinov2', 'salad'], 
+                        help='Type of features to use: dinov2 or salad (default: dinov2)')
     
     args = parser.parse_args()
     
@@ -398,16 +413,19 @@ def main():
             print("Cross-file comparison mode enabled")
             print(f"File 1: {args.input_path}")
             print(f"File 2: {args.file2}")
+            print(f"Feature type: {args.feature_type.upper()}")
             
             # Load both files
             print("Loading obj_points from file 1...")
-            obj_data1 = load_obj_points_file(args.input_path, max_objects=args.max_objects)
+            obj_data1 = load_obj_points_file(args.input_path, max_objects=args.max_objects, 
+                                           feature_type=args.feature_type)
             
             print("Loading obj_points from file 2...")
-            obj_data2 = load_obj_points_file(args.file2, max_objects=args.max_objects)
+            obj_data2 = load_obj_points_file(args.file2, max_objects=args.max_objects, 
+                                           feature_type=args.feature_type)
             
             if len(obj_data1) == 0 or len(obj_data2) == 0:
-                print("No objects with DINOv2 features found in one or both files!")
+                print(f"No objects with {args.feature_type.upper()} features found in one or both files!")
                 return
             
             # Calculate cross-similarity matrix
@@ -439,9 +457,11 @@ def main():
         else:
             # Single file mode (original functionality)
             print("Loading obj_points...")
+            print(f"Feature type: {args.feature_type.upper()}")
             if args.single_file or os.path.isfile(args.input_path):
                 # Load single file
-                obj_data = load_obj_points_file(args.input_path, max_objects=args.max_objects)
+                obj_data = load_obj_points_file(args.input_path, max_objects=args.max_objects, 
+                                              feature_type=args.feature_type)
             else:
                 # Load from directory (use first file)
                 obj_points_files = glob.glob(os.path.join(args.input_path, "obj_points_*.npy"))
@@ -450,10 +470,11 @@ def main():
                     print("No obj_points files found in directory!")
                     return
                 print(f"Using first file: {obj_points_files[0]}")
-                obj_data = load_obj_points_file(obj_points_files[0], max_objects=args.max_objects)
+                obj_data = load_obj_points_file(obj_points_files[0], max_objects=args.max_objects, 
+                                              feature_type=args.feature_type)
             
             if len(obj_data) == 0:
-                print("No objects with DINOv2 features found!")
+                print(f"No objects with {args.feature_type.upper()} features found!")
                 return
             
             # Calculate similarity matrix
