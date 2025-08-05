@@ -624,7 +624,7 @@ def is_new_obj(new_mask, obj_points, iou_threshold=0.5):
 def detect_with_automask(full_mask, **kwargs):
     mask_generator = kwargs['mask_generator']
     import numpy as np
-    from sam2.util.amg import build_all_layer_point_grids
+    from sam2.utils.amg import build_all_layer_point_grids
 
     def mask_points(points, mask):
         """
@@ -798,6 +798,127 @@ def load_obj_points(filepath):
     obj_points.update(loaded_dict)
     print(f"Loaded obj_points from {filepath}")
     return obj_points
+
+def reident_new_masks(obj_points, num_obj_last_it, salad_features, threshold=0.5, viz=False, new_crop=None, output_dir=".", idx1=None, idx2=None):
+    """
+    Reidentify new masks based on their features.
+    calculate cosine similarity between previous features and current salad feature. If above threshold, return old obj_id
+    
+    Args:
+        obj_points: dict mapping obj_id to object data including 'crop' and 'salad_features'
+        num_obj_last_it: number of objects from last iteration
+        salad_features: new salad features to compare against
+        threshold: similarity threshold for reidentification
+        viz: whether to create visualization
+        new_crop: new crop image for visualization (optional)
+        output_dir: directory to save visualization (default: current directory)
+        idx1: first index for filename
+        idx2: second index for filename
+    """
+    # Compute similarity between each old object and the new object
+    cosine_sim = []
+    for i in range(num_obj_last_it):
+        old_features = obj_points[i]['salad_features']
+        new_features = salad_features.squeeze()
+        
+        dot_product = np.dot(old_features, new_features)
+        norm_old = np.linalg.norm(old_features)
+        norm_new = np.linalg.norm(new_features)
+        similarity = dot_product / (norm_old * norm_new)
+        cosine_sim.append(similarity)
+    
+    cosine_sim = np.array(cosine_sim)
+    max_sim_idx = np.argmax(cosine_sim)
+
+    if viz:
+        visualize_reidentification(obj_points, num_obj_last_it, new_crop, cosine_sim, output_dir, idx1, idx2)
+        
+    if cosine_sim[max_sim_idx] > threshold:
+        return max_sim_idx
+    else:
+        return -1
+
+
+def visualize_reidentification(obj_points, num_obj_last_it, new_crop, cosine_sim, output_dir=".", idx1=None, idx2=None):
+    """
+    Visualize reidentification process showing new crop on left, old crops on right with similarity scores.
+    
+    Args:
+        obj_points: dict mapping obj_id to object data including 'crop'
+        num_obj_last_it: number of objects from last iteration
+        new_crop: new crop image (optional)
+        cosine_sim: similarity scores between old objects and new features
+        output_dir: directory to save the visualization (default: current directory)
+        idx1: first index for filename
+        idx2: second index for filename
+    """
+    import matplotlib.pyplot as plt
+    import os
+    
+    n_old_objects = num_obj_last_it
+    if n_old_objects == 0:
+        print("No old objects to visualize")
+        return
+        
+    # Calculate grid for old objects
+    n_cols = min(4, n_old_objects)  # Max 4 columns for readability
+    n_rows = (n_old_objects + n_cols - 1) // n_cols
+    
+    # Create figure: left side for new crop, right side for old crops
+    fig_width = 8 + 4 * n_cols  # Extra space for new crop
+    fig_height = 4 * max(n_rows, 1)
+    
+    fig, axes = plt.subplots(n_rows, n_cols + 1, figsize=(fig_width, fig_height))
+    
+    # Handle single row case
+    if n_rows == 1:
+        axes = axes.reshape(1, -1)
+    
+    # Plot new crop on the left (first column)
+    if new_crop is not None:
+        ax_new = axes[0, 0] if n_rows == 1 else axes[0, 0]
+        ax_new.imshow(new_crop)
+        ax_new.set_title('New Object', fontsize=14, fontweight='bold')
+        ax_new.axis('off')
+    
+    # Plot old object crops on the right with similarity scores above
+    for idx in range(n_old_objects):
+        row = idx // n_cols
+        col = (idx % n_cols) + 1  # Start from column 1 (after new crop)
+        
+        ax = axes[row, col]
+        
+        # Get crop and similarity
+        crop = obj_points[idx].get('crop')
+        sim_score = float(cosine_sim[idx])  # Convert to float to fix formatting issue
+        
+        if crop is not None:
+            ax.imshow(crop)
+        
+        # Add object ID and similarity score side by side in title
+        ax.set_title(f'Obj {idx} | Score: {sim_score:.3f}', fontsize=10)
+        ax.axis('off')
+    
+    # Hide empty subplots
+    for row in range(n_rows):
+        for col in range(n_cols + 1):
+            if col == 0 and new_crop is None:  # Hide new crop area if no new crop
+                axes[row, col].axis('off')
+            elif col > 0 and (col - 1) + row * n_cols >= n_old_objects:  # Hide unused old object areas
+                axes[row, col].axis('off')
+    
+    plt.tight_layout()
+    
+    # Use idx1 and idx2 for filename
+    if idx1 is not None and idx2 is not None:
+        filename = f'reidentification_visualization_{idx1}_{idx2}.png'
+    else:
+        filename = 'reidentification_visualization.png'
+    os.makedirs(output_dir, exist_ok=True)
+    filepath = os.path.join(output_dir, filename)
+    plt.savefig(filepath, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Reidentification visualization saved as '{filename}'")
 
 def solve_overlap(obj_points, new_regions, containment_threshold=0.7, overlap_threshold=0.3, viz_img=None):
     """

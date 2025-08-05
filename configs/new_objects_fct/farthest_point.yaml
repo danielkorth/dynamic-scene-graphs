@@ -1,4 +1,4 @@
-_target_: sam2_reinit.detect_with_furthest
+_target_: util.sam2_utils.detect_with_furthest
 _partial_: true
 buffer_radius: 10
 n_samples: 10

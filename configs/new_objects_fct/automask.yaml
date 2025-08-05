@@ -1,2 +1,2 @@
-_target_: utils.sam2_utils.detect_with_automask
+_target_: util.sam2_utils.detect_with_automask
 _partial_: true

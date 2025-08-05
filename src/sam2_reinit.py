@@ -1,8 +1,7 @@
-from util.sam2_utils import (create_overlapping_subsets, detect_with_furthest, is_new_obj, mask_first_frame, 
-                                save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations, detect_with_cc, get_mask_from_points, save_obj_points, solve_overlap)
+from util.sam2_utils import (create_overlapping_subsets, mask_first_frame, 
+                                save_sam_cv2, make_video_from_visualizations, save_obj_points, solve_overlap, reident_new_masks)
 from sam2.build_sam import build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
-from segment import SAM2Segmenter
 from features.dinov2 import DINOv2
 from features.salad import SALAD
 import hydra
@@ -138,48 +137,41 @@ def main(cfg):
         img_last_patch = Image.open(last_img_patch_path)
         img_last_patch_np = np.array(img_last_patch)
 
-        # Detect new regions
-        if cfg.new_objects_fct == 'automask':
-            new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_last_patch_np)
-        else:
-            new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask)
+        new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_last_patch_np)
 
         if len(new_regions) > 0:
-            if new_regions[0]['mask'] is None and cfg.prompt_with_masks:
-                last_img_patch_path = subsets[i] + f"/{len(video_segments)-1:06d}.jpg"
-                img_last_patch = Image.open(last_img_patch_path)
-                img_last_patch_np = np.array(img_last_patch)
-                all_points = np.vstack([new_regions[i]['points'] for i in range(len(new_regions))])
-                valids_idx, valid_masks = get_mask_from_points(all_points, img_segmenter, img_last_patch_np, iou_threshold=0.5)
-                new_regions = [new_regions[i] for i in valids_idx]
-                for v_i, mask in enumerate(valid_masks):
-                    new_regions[v_i]['mask'] = mask
+            # if new_regions[0]['mask'] is None and cfg.prompt_with_masks:
+            #     last_img_patch_path = subsets[i] + f"/{len(video_segments)-1:06d}.jpg"
+            #     img_last_patch = Image.open(last_img_patch_path)
+            #     img_last_patch_np = np.array(img_last_patch)
+            #     all_points = np.vstack([new_regions[i]['points'] for i in range(len(new_regions))])
+            #     valids_idx, valid_masks = get_mask_from_points(all_points, img_segmenter, img_last_patch_np, iou_threshold=0.5)
+            #     new_regions = [new_regions[i] for i in valids_idx]
+            #     for v_i, mask in enumerate(valid_masks):
+            #         new_regions[v_i]['mask'] = mask
             
-            if new_regions[0]['mask'] is not None:
-                obj_points, new_regions = solve_overlap(obj_points, new_regions)
-                # obj_points, new_regions = solve_overlap(obj_points, new_regions, viz_img=img_last_patch_np)
-
+            # obj_points, new_regions = solve_overlap(obj_points, new_regions)
 
             # add new categories
-            next_obj_id = max(obj_points.keys()) + 1
+            num_obj_last_it = max(obj_points.keys())
+            next_obj_id = num_obj_last_it + 1
             for j, new_region in enumerate(new_regions):
-                if new_region['mask'] is None or is_new_obj(new_region['mask'], obj_points, iou_threshold=0.5):
-                    new_obj_id = next_obj_id + j
-                    obj_points[new_obj_id]['points'] = new_region['points'].astype(np.float32).reshape(-1, 2) if new_region['points'] is not None else None
-                    obj_points[new_obj_id]['labels'] = new_region['labels'] if new_region['labels'] is not None else None
-                    obj_points[new_obj_id]['mask'] = new_region['mask']
-                    obj_points[new_obj_id]['crop'] = sv.crop_image(img_last_patch_np, mask_to_xyxy(new_region['mask'][None, ...]))
-                    crop_path = os.path.join(crop_dir, f"cropped_image_{new_obj_id}.jpg")
-                    cv2.imwrite(crop_path, obj_points[new_obj_id]['crop'])
+                ### get rop and extract features
+                obj_points[next_obj_id]['crop'] = sv.crop_image(img_last_patch_np, mask_to_xyxy(new_region['mask'][None, ...]))
+                cv2.imwrite(crop_path, obj_points[next_obj_id]['crop'])
+                # Extract DINOv2 features immediately for new objects
+                dinov2_features = dinov2_extractor.extract_features(crop_path).cpu().numpy()
+                salad_features = salad_extractor.extract_features(crop_path).cpu().numpy()
 
-                    # Extract DINOv2 features immediately for new objects
-                    dinov2_features = dinov2_extractor.extract_features(crop_path)
-                    obj_points[new_obj_id]['dinov2_features'] = dinov2_features.cpu().numpy()
-                    salad_features = salad_extractor.extract_features(crop_path)
-                    obj_points[new_obj_id]['salad_features'] = salad_features.cpu().numpy()
+                ### check if the new object is new
+                new_crop = obj_points[next_obj_id]['crop']
+                new_obj_id = reident_new_masks(obj_points, num_obj_last_it, salad_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
+                if new_obj_id == -1:
+                    new_obj_id = next_obj_id
+                    next_obj_id += 1
 
-                else:
-                    print(f"New region {j} is not new")
+                obj_points[new_obj_id]['mask'] = new_region['mask']
+                crop_path = os.path.join(crop_dir, f"cropped_image_{new_obj_id}.jpg")
 
         # save_points_image_cv2_obj_id(os.path.join(subsets[i], f"{len(video_segments)-1:06d}.jpg"), obj_points, os.path.join(cfg.output_folder, f"frame_{i}_obj_id_new.png"))
 
