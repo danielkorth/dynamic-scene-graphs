@@ -6,7 +6,7 @@ from utils.tools import get_color_for_id
 from scipy.spatial.transform import Rotation
 from utils.cv2_utils import unproject_image
 
-def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf=False, use_dynamic_tracking=False):
+def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf=False):
     """
     Process a frame and update the scene graph with either TSDF or point cloud representation.
     
@@ -30,38 +30,31 @@ def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, gra
     for obj_id, obj_point in obj_points.items():
         if obj_point['mask'].sum() == 0:
             continue
-        points_3d, _ = unproject_image(depth, K, -rvec, tvec, mask=obj_point['mask'], dist=None)
+        points_3d, _ = unproject_image(depth, K, -rvec, tvec, mask=obj_point['mask'], dist=None, mask_erode_kernel=5)
         centroid = np.mean(points_3d, axis=0)
 
-        if f"obj_{obj_id}" not in graph:
-            # Generate unique color for this object
-            color = np.array(get_color_for_id(obj_id))
-            node = Node(f"obj_{obj_id}", centroid, color=color, pct=points_3d, 
-                       use_tsdf=use_tsdf, use_dynamic_tracking=use_dynamic_tracking)
-            graph.add_node(node)
-            
-            # If using TSDF, integrate the first frame
-            if use_tsdf:
-                node.integrate_frame_to_tsdf(depth, rgb, obj_point['mask'], K, camera_pose)
-            elif use_dynamic_tracking:
-                # Initialize dynamic tracking with first frame
-                node.update_with_dynamic_tracking(points_3d, rgb, depth, obj_point['mask'], K, camera_pose)
-        else:
-            node = graph.nodes[f'obj_{obj_id}']
-            node.centroid = centroid
-            
-            if use_tsdf:
-                # Integrate frame into TSDF
-                node.integrate_frame_to_tsdf(depth, rgb, obj_point['mask'], K, camera_pose)
-            elif use_dynamic_tracking:
-                # Use dynamic tracking for moving objects
-                node.update_with_dynamic_tracking(points_3d, rgb, depth, obj_point['mask'], K, camera_pose)
+        if len(points_3d) > 0:
+            if f"obj_{obj_id}" not in graph:
+                # Generate unique color for this object
+                color = np.array(get_color_for_id(obj_id))
+                node = Node(f"obj_{obj_id}", centroid, color=color, pct=points_3d, 
+                        use_tsdf=use_tsdf)
+                graph.add_node(node)
+                
+                # If using TSDF, integrate the first frame
+                if use_tsdf:
+                    node.integrate_frame_to_tsdf(depth, rgb, obj_point['mask'], K, camera_pose)
+
             else:
-                # Use point cloud representation
-                if cfg.accumulate_points:
-                    node.pct = np.vstack([node.pct, points_3d])
+                node = graph.nodes[f'obj_{obj_id}']
+                
+                if use_tsdf:
+                    # Integrate frame into TSDF
+                    node.integrate_frame_to_tsdf(depth, rgb, obj_point['mask'], K, camera_pose)
+                    points_3d, colors = node.tsdf.extract_point_cloud() 
                 else:
-                    node.pct = points_3d
+                    node.integrate_pointcloud(points_3d, cfg.accumulate_points)
+            
 
 class SceneGraph:
     def __init__(self):

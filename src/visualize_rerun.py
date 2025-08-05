@@ -105,7 +105,7 @@ def main(cfg: DictConfig):
         rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks(obj_points)))
 
         # Process frame with chosen representation
-        process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf, use_dynamic_tracking=True)
+        process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf)
 
         print("Graph size: ", len(graph))
 
