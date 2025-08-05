@@ -4,7 +4,7 @@ import copy
 from scipy.spatial.transform import Rotation
 import cv2
 
-from util.tools import center_crop
+from dsg.utils.tools import center_crop
 
 def create_camera_mesh(scale=0.1, color = [0.9, 0.1, 0.1]):
     """

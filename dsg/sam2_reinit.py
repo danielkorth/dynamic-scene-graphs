@@ -1,9 +1,9 @@
-from util.sam2_utils import (create_overlapping_subsets, mask_first_frame, 
+from dsg.utils.sam2_utils import (create_overlapping_subsets, mask_first_frame, 
                                 save_sam_cv2, make_video_from_visualizations, save_obj_points, solve_overlap, reident_new_masks)
 from sam2.build_sam import build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
-from features.dinov2 import DINOv2
-from features.salad import SALAD
+from dsg.features.dinov2 import DINOv2
+from dsg.features.salad import SALAD
 import hydra
 import os
 from PIL import Image
@@ -150,30 +150,30 @@ def main(cfg):
             #     for v_i, mask in enumerate(valid_masks):
             #         new_regions[v_i]['mask'] = mask
             
-            # obj_points, new_regions = solve_overlap(obj_points, new_regions)
+            obj_points, new_regions = solve_overlap(obj_points, new_regions)
 
             # add new categories
             num_obj_last_it = max(obj_points.keys())
             next_obj_id = num_obj_last_it + 1
             for j, new_region in enumerate(new_regions):
                 ### get rop and extract features
-                obj_points[next_obj_id]['crop'] = sv.crop_image(img_last_patch_np, mask_to_xyxy(new_region['mask'][None, ...]))
-                cv2.imwrite(crop_path, obj_points[next_obj_id]['crop'])
+                new_crop = sv.crop_image(img_last_patch_np, mask_to_xyxy(new_region['mask'][None, ...]))
+                crop_path = os.path.join(crop_dir, f"cropped_image_{next_obj_id}.jpg")
+                cv2.imwrite(crop_path, new_crop)
                 # Extract DINOv2 features immediately for new objects
                 dinov2_features = dinov2_extractor.extract_features(crop_path).cpu().numpy()
                 salad_features = salad_extractor.extract_features(crop_path).cpu().numpy()
 
                 ### check if the new object is new
-                new_crop = obj_points[next_obj_id]['crop']
                 new_obj_id = reident_new_masks(obj_points, num_obj_last_it, salad_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
                 if new_obj_id == -1:
                     new_obj_id = next_obj_id
                     next_obj_id += 1
 
                 obj_points[new_obj_id]['mask'] = new_region['mask']
-                crop_path = os.path.join(crop_dir, f"cropped_image_{new_obj_id}.jpg")
-
-        # save_points_image_cv2_obj_id(os.path.join(subsets[i], f"{len(video_segments)-1:06d}.jpg"), obj_points, os.path.join(cfg.output_folder, f"frame_{i}_obj_id_new.png"))
+                obj_points[new_obj_id]['crop'] = new_crop
+                obj_points[new_obj_id]['dinov2_features'] = dinov2_features
+                obj_points[new_obj_id]['salad_features'] = salad_features
 
     # At the end of main, after all processing:
     video_fps = getattr(cfg, 'video_fps', 15)

@@ -1,14 +1,24 @@
 [project]
-name = "src"
+name = "dsg"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
+    "opencv-python",
+    "scipy",
+    "rerun-sdk",
+    "hydra-core",
+    "supervision",
+    "transformers",
+    "accelerate",
+    "pytorch-lightning==2.1.2",
+    "pytorch-metric-learning==2.3.0",
+    "xformers",
     "huggingface-hub>=0.33.2",
     "jupyter>=1.1.1",
     "matplotlib>=3.10.3",
-    "numpy>=2.3.1",
+    "numpy",
     "open3d>=0.19.0",
     "opencv-python>=4.11.0.86",
     "rerun-sdk>=0.23.4",
@@ -18,5 +28,10 @@ dependencies = [
     "tqdm>=4.67.1",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src"] 
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["dsg*"]
+exclude = ["tmp*", "data*", "sam2*", "outputs*", "configs*", "multirun*", "notebooks*", "checkpoints*"] 

@@ -1,4 +1,4 @@
-from scenegraph.node import Node, Edge
+from dsg.scenegraph.node import Node, Edge
 import rerun as rr
 import numpy as np
 

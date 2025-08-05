@@ -4,27 +4,13 @@
 
 
 ```bash
-conda create -n dsg python=3.11
+conda create -n dsg python=3.10
 conda activate dsg
 pip install uv 
-uv pip install -r requirements.txt
+uv pip install -e .
 # installing sam2
 cd sam2
 uv pip install -e .
-```
-
-After this, you can import your package modules from anywhere in your environment, for example:
-
-```python
-from rerun_viz import ...
-from utils import ...
-```
-
-## Submodules
-
-```bash
-cd sam2
-pip install -e .
 ```
 
 ## Data Structure

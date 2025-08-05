@@ -1,7 +1,7 @@
 import os
 import numpy as np
-from util.sam2_utils import mask_first_frame
-from util.tools import get_color_for_id
+from dsg.utils.sam2_utils import mask_first_frame
+from dsg.utils.tools import get_color_for_id
 import cv2
 import hydra
 from ultralytics import YOLO

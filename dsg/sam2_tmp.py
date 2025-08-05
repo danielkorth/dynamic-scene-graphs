@@ -1,8 +1,8 @@
-from util.sam2_utils import (create_overlapping_subsets, detect_with_furthest, is_new_obj, mask_first_frame, 
+from dsg.utils.sam2_utils import (create_overlapping_subsets, detect_with_furthest, is_new_obj, mask_first_frame, 
                                 save_sam_cv2, save_points_image_cv2_obj_id, make_video_from_visualizations, detect_with_cc, get_mask_from_points, save_obj_points, solve_overlap)
 from sam2.build_sam import build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
-from segment import SAM2Segmenter
+from dsg.segment import SAM2Segmenter
 import hydra
 import os
 from PIL import Image

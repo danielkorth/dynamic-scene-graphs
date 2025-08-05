@@ -8,7 +8,7 @@ import math
 from skimage.measure import label, regionprops
 import glob
 
-from segment import SAM2Segmenter
+from dsg.segment import SAM2Segmenter
 from scipy.ndimage import binary_erosion
 
 
@@ -691,7 +691,7 @@ def detect_with_automask(full_mask, **kwargs):
 
 # Save results using OpenCV for speed
 def save_sam_cv2(video_segments, frames_dir, masks_dir, vis_dir):
-    from util.tools import get_color_for_id
+    from dsg.utils.tools import get_color_for_id
     os.makedirs(masks_dir, exist_ok=True)
     os.makedirs(vis_dir, exist_ok=True)
     for out_frame_idx in video_segments.keys():
@@ -798,6 +798,7 @@ def load_obj_points(filepath):
     obj_points.update(loaded_dict)
     print(f"Loaded obj_points from {filepath}")
     return obj_points
+
 
 def reident_new_masks(obj_points, num_obj_last_it, salad_features, threshold=0.5, viz=False, new_crop=None, output_dir=".", idx1=None, idx2=None):
     """
