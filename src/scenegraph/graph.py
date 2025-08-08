@@ -28,7 +28,7 @@ def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, gra
     camera_pose[:3, 3] = tvec
 
     for obj_id, obj_point in obj_points.items():
-        if obj_point['mask'].sum() == 0:
+        if obj_point['mask'].sum() <= 0:
             continue
         points_3d, _ = unproject_image(depth, K, -rvec, tvec, mask=obj_point['mask'], dist=None, mask_erode_kernel=5)
         centroid = np.mean(points_3d, axis=0)
@@ -53,7 +53,9 @@ def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, gra
                     node.integrate_frame_to_tsdf(depth, rgb, obj_point['mask'], K, camera_pose)
                     points_3d, colors = node.tsdf.extract_point_cloud() 
                 else:
-                    node.integrate_pointcloud(points_3d, cfg.accumulate_points)
+                    node.integrate_pointcloud(points_3d, cfg.accumulate_points, 
+                                            camera_intrinsics=K, camera_pose=camera_pose, 
+                                            current_mask=obj_point['mask'], depth_image=depth)
             
 
 class SceneGraph:
