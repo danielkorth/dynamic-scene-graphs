@@ -162,6 +162,7 @@ class Node:
                  radius: float = 0.003,
                  label: str = "",
                  pct: np.ndarray | None = None,
+                 rgb_points: np.ndarray | None = None,
                  tsdf: Optional[TSDFVolume] = None,
                  use_tsdf: bool = False):
         self.name = name
@@ -171,6 +172,7 @@ class Node:
         self.radius = radius
         self.label = label
         self.pct = pct
+        self.rgb = rgb_points
         self.tsdf = tsdf
         self.use_tsdf = use_tsdf
         self.n_acc_pcs = 0
@@ -208,11 +210,13 @@ class Node:
     def pct(self, value: np.ndarray):
         self._pct = value
     
-    def add_pct(self, pct: np.ndarray):
+    def add_pct(self, pct: np.ndarray, rgb_points: np.ndarray):
         if self.pct is None:
             self.pct = pct
+            self.rgb = rgb_points
         else:
             self.pct = np.concatenate([self.pct, pct], axis=0)
+            self.rgb = np.concatenate([self.rgb, rgb_points], axis=0)
     
     def integrate_frame_to_tsdf(self, 
                                depth_image: np.ndarray,
@@ -322,7 +326,7 @@ class Node:
         if (not accumulate_points or 
                 self.pct is None or 
                 len(self.pct) == 0 or
-                self.n_acc_pcs >= 10):
+                self.n_acc_pcs >= 1000):
             return "replace"
 
         VOLUME_THRESHOLD = 0.005  # adjust as needed
@@ -376,7 +380,7 @@ class Node:
         # Default to merge if motion detection parameters are not provided
         return "merge"
 
-    def _replace_pointcloud(self, points_3d: np.ndarray):
+    def _replace_pointcloud(self, points_3d: np.ndarray, rgb_points: np.ndarray):
         """
         Replace the current pointcloud with new points.
         
@@ -384,9 +388,10 @@ class Node:
             points_3d: New pointcloud to set (N, 3)
         """
         self.pct = points_3d
+        self.rgb = rgb_points
         self.n_acc_pcs = 1
 
-    def _register_and_merge_pointclouds(self, points_3d: np.ndarray):
+    def _register_and_merge_pointclouds(self, points_3d: np.ndarray, rgb_points: np.ndarray):
         """
         Register and merge new pointcloud with existing one using global registration and ICP.
         
@@ -396,9 +401,11 @@ class Node:
         # Convert numpy arrays to Open3D point clouds
         source_pcd = o3d.geometry.PointCloud()
         source_pcd.points = o3d.utility.Vector3dVector(self.pct)
+        source_pcd.colors = o3d.utility.Vector3dVector(self.rgb)
 
         target_pcd = o3d.geometry.PointCloud()
         target_pcd.points = o3d.utility.Vector3dVector(points_3d)
+        target_pcd.colors = o3d.utility.Vector3dVector(rgb_points)
 
         # Decide whether to run global registration based on centroid distance vs. a
         # dynamic threshold that depends on the volumes of the two pointclouds
@@ -463,10 +470,11 @@ class Node:
 
         # Stack the new points with the transformed old points
         self.pct = np.vstack([points_3d, transformed_points])
+        self.rgb = np.vstack([rgb_points, self.rgb])
         self.n_acc_pcs += 1
         
 
-    def integrate_pointcloud(self, points_3d: np.ndarray, accumulate_points: bool = False, visualize: bool = False,
+    def integrate_pointcloud(self, points_3d: np.ndarray, rgb_points: np.ndarray, accumulate_points: bool = False, visualize: bool = False,
                            camera_intrinsics: np.ndarray = None, camera_pose: np.ndarray = None, 
                            current_mask: np.ndarray = None, depth_image: np.ndarray = None):
         """
@@ -496,11 +504,11 @@ class Node:
         # aggregation = "accumulate"
 
         if aggregation == "replace":
-            self._replace_pointcloud(points_3d)
+            self._replace_pointcloud(points_3d, rgb_points)
         elif aggregation == "merge":
-            self._register_and_merge_pointclouds(points_3d)
+            self._register_and_merge_pointclouds(points_3d, rgb_points)
         elif aggregation == "accumulate":
-            self.add_pct(points_3d)
+            self.add_pct(points_3d, rgb_points)
         elif aggregation == "ignore":
             return
         else:
@@ -509,6 +517,7 @@ class Node:
         # Voxel downsample before computing centroid
         o3d_pct = o3d.geometry.PointCloud()
         o3d_pct.points = o3d.utility.Vector3dVector(self.pct)
+        o3d_pct.colors = o3d.utility.Vector3dVector(self.rgb)   
         
         # Compute bounding box volume to determine voxel size
         if self.pct is not None and len(self.pct) > 0:
@@ -533,8 +542,10 @@ class Node:
             cl, ind = pcd_down.remove_statistical_outlier(nb_neighbors=20, std_ratio=std_ratio)
             pcd_filtered = pcd_down.select_by_index(ind)
             self.pct = np.asarray(pcd_filtered.points)
+            self.rgb = np.asarray(pcd_filtered.colors)
         else:
             self.pct = np.asarray(pcd_down.points)
+            self.rgb = np.asarray(pcd_down.colors)
         
         self.centroid = np.mean(self.pct, axis=0)
 

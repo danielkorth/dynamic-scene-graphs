@@ -1,8 +1,7 @@
 from pathlib import Path
 import argparse
 import rerun as rr
-from utils.colmap_utils import load_colmap_poses
-from utils.data_loading import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, load_all_masks, get_camera_matrix, get_distortion_coeffs, load_all_points
+from utils.data_loading import load_poses, get_camera_matrix
 from utils.rerun import setup_blueprint
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -10,6 +9,8 @@ import time
 import hydra
 from omegaconf import DictConfig
 from scenegraph.graph import SceneGraph, process_frame_with_representation
+import open3d as o3d
+import os
 
 def aggregate_masks(obj_points):
     mask = -1 * np.ones(obj_points[0]['mask'].shape)
@@ -120,6 +121,41 @@ def main(cfg: DictConfig):
             ))
 
         rr.set_time(timeline="world", sequence=i)
+
+    # Save Open3D textured pointclouds for each node
+    save_textured_pointclouds(graph, cfg.source_folder)
+
+
+def save_textured_pointclouds(graph, source_folder):
+    """
+    Save textured point clouds for all nodes in the scene graph as PLY files.
+    
+    Args:
+        graph: SceneGraph object containing nodes with point cloud data
+        source_folder: Base folder path where reconstructions will be saved
+    """
+    print("Saving textured pointclouds for all nodes...")
+    
+    # Create output directory
+    output_dir = Path(source_folder) / "final_reconstructions"
+    output_dir.mkdir(exist_ok=True)
+    
+    # Save pointcloud for each node
+    for node_name, node in graph.nodes.items():
+        if node.pct is not None and node.rgb is not None and len(node.pct) > 0:
+            # Create Open3D pointcloud
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(node.pct)
+            pcd.colors = o3d.utility.Vector3dVector(node.rgb)  # Normalize RGB values to [0,1]
+            
+            # Save as PLY file
+            output_file = output_dir / f"{node_name}_textured.ply"
+            o3d.io.write_point_cloud(str(output_file), pcd)
+            print(f"Saved {node_name} pointcloud with {len(node.pct)} points to {output_file}")
+        else:
+            print(f"Skipping {node_name} - no valid pointcloud data")
+    
+    print(f"All pointclouds saved to {output_dir}")
 
 
 if __name__ == "__main__":
