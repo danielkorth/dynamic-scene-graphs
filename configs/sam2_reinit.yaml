@@ -5,7 +5,7 @@ defaults:
   - _self_
 
 # needs to be provided
-recording: office4
+recording: umbrella2
 
 # Input/Output Paths  
 source_folder: ${paths.data_dir}zed/${recording}
@@ -20,7 +20,7 @@ use_obj_points: true
 # hardcoded for now
 
 # Frame configs
-subsample: 10 # subsample factor on original frames
+subsample: 5 # subsample factor on original frames
 chunk_size: 10 # chunk size of overlapping subsets
 overlap: 1 # overlap between chunks
 
@@ -30,6 +30,6 @@ prompt_with_masks: true
 viz: false # visualize the first segmentation
 
 # rerun viz specific
-max_frames: 100  # Max frames to process, 0=no limit (default: 0)
+max_frames: 0  # Max frames to process, 0=no limit (default: 0)
 headless: false
 accumulate_points: true

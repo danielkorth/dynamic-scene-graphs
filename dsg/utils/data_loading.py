@@ -42,7 +42,7 @@ def load_poses(path, max_frames=None, subsample=None, load_open3d=False):
         rotations = rotations[::subsample]
     
     # Apply max_frames limit after subsampling
-    if max_frames is not None:
+    if max_frames is not None and max_frames > 0:
         translations = translations[:max_frames]
         rotations = rotations[:max_frames]
 
