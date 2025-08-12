@@ -1,6 +1,6 @@
 from pathlib import Path
 import argparse
-from utils.data_loading import load_poses, load_camera_intrinsics, get_camera_matrix, get_distortion_coeffs
+from dsg.utils.data_loading import load_poses, load_camera_intrinsics, get_camera_matrix, get_distortion_coeffs
 import numpy as np
 from scipy.spatial.transform import Rotation
 import open3d as o3d

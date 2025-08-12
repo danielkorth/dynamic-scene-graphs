@@ -1,7 +1,7 @@
 defaults:
   - paths: default
   - sam: tiny
-  - new_objects_fct:  automask #farthest_point #sampling_cc
+  - new_objects_fct: automask
   - _self_
 
 # needs to be provided

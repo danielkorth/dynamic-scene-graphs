@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from typing import List
 
-from utils.open3d_utils import CameraPose
+from dsg.utils.open3d_util import CameraPose
 
 def load_all_color_images(color_dir: str) -> List[np.ndarray]:
     """Load all color images from the color directory as numpy arrays."""
