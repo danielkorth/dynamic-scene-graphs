@@ -1,4 +1,20 @@
-# dynamic-scene-graphs
+<div align="center">
+
+# Dynamic Scene Graphs from RGB-D
+[Daniel Korth](https://danielkorth.io/)<sup>1</sup>, [Xavi Anadon](https://x.com/XaviXva)<sup>2</sup> <br>
+<sup>1</sup>Technical University of Munich, <sup>2</sup>University of Zaragoza
+
+[Report](docs/static/pdfs/report.pdf) | [Project Page](https://danielkorth.github.io/sfm-reconstruction-priors/) | [Slides](docs/static/pdfs/slides.pdf)
+</div>
+
+<div align="center">
+
+<img src="docs/static/images/pipeline.png" alt="Pipeline" width="100%">
+</div>
+
+Work done during 2 month ETH SSRF / RSL internship. Advised by Zuria Bauer and Daniel Barath.
+
+tl;dr: ZED i2 RGB-D recording -> poses -> SAM2 multitrack segmentation -> scene graph + object reconstruction + salad/clip features.
 
 ## Setup
 
@@ -11,20 +27,6 @@ uv pip install -r requirements.txt
 # installing sam2
 cd sam2
 uv pip install -e .
-```
-
-After this, you can import your package modules from anywhere in your environment, for example:
-
-```python
-from rerun_viz import ...
-from utils import ...
-```
-
-## Submodules
-
-```bash
-cd sam2
-pip install -e .
 ```
 
 ## Data Structure
