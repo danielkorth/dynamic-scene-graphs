@@ -20,7 +20,7 @@ use_obj_points: true
 # hardcoded for now
 
 # Frame configs
-subsample: 5 # subsample factor on original frames
+subsample: 10 # subsample factor on original frames
 chunk_size: 10 # chunk size of overlapping subsets
 overlap: 1 # overlap between chunks
 
@@ -33,3 +33,4 @@ viz: false # visualize the first segmentation
 max_frames: 0  # Max frames to process, 0=no limit (default: 0)
 headless: false
 accumulate_points: true
+use_tsdf: false  # Use TSDF volume representation instead of point clouds

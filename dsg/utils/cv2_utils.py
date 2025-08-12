@@ -3,7 +3,7 @@ import cv2
 from scipy.spatial.transform import Rotation
 
 
-def unproject_image(depth_image, K, rvec, tvec, dist=None, mask=None):
+def unproject_image(depth_image, K, rvec, tvec, dist=None, mask=None, mask_erode_kernel=3):
     """
     Unproject an entire depth image to 3D world coordinates with optional distortion correction.
     
@@ -24,11 +24,21 @@ def unproject_image(depth_image, K, rvec, tvec, dist=None, mask=None):
     # Create coordinate grids
     u_coords, v_coords = np.meshgrid(np.arange(w), np.arange(h))
     
-    # Apply mask if provided
+    # Apply mask if provided, with erosion
     if mask is not None:
+        if mask_erode_kernel > 1:
+            kernel = np.ones((mask_erode_kernel, mask_erode_kernel), np.uint8)
+            mask = cv2.erode(mask.astype(np.uint8), kernel, iterations=1)
+        
+        # Check if mask is empty after erosion
+        if np.sum(mask) == 0:
+            # Return empty arrays if mask is completely eroded
+            return np.empty((0, 3)), np.empty((0, 2))
+            
         valid_mask = (mask > 0) & (depth_image > 0)
     else:
         valid_mask = depth_image > 0
+
     
     # Get valid pixel coordinates and depths
     u_valid = u_coords[valid_mask]
