@@ -2,9 +2,9 @@ from dsg.scenegraph.node import Node, Edge
 import rerun as rr
 import numpy as np
 import open3d as o3d
-from utils.tools import get_color_for_id
+from dsg.utils.tools import get_color_for_id
 from scipy.spatial.transform import Rotation
-from utils.cv2_utils import unproject_image
+from dsg.utils.cv2_utils import unproject_image
 import cv2
 
 def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf=False):
@@ -31,7 +31,8 @@ def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, gra
     for obj_id, obj_point in obj_points.items():
         if obj_point['mask'].sum() <= 0:
             continue
-        points_3d, pixel_coords = unproject_image(depth, K, -rvec, tvec, mask=obj_point['mask'], dist=None, mask_erode_kernel=5)
+        erosion_kernel = 13 if cfg.depth_source is not None and "moge" in cfg.depth_source else 5
+        points_3d, pixel_coords = unproject_image(depth, K, -rvec, tvec, mask=obj_point['mask'], dist=None, mask_erode_kernel=erosion_kernel)
         # Convert pixel coordinates to integers for array indexing
         pixel_coords_int = pixel_coords.astype(np.int32)
         rgb_points = rgb[pixel_coords_int[:, 1], pixel_coords_int[:, 0]] / 255.0

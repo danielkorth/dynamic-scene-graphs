@@ -5,7 +5,7 @@ defaults:
   - _self_
 
 # needs to be provided
-recording: umbrella2
+recording: office4
 
 # Input/Output Paths  
 source_folder: ${paths.data_dir}zed/${recording}
@@ -15,6 +15,11 @@ mask_images_output_folder: ${paths.data_dir}/zed/${recording}/mask_images_${stri
 output_folder: ${paths.output_dir}
 intrinsics_file: ${images_folder}/intrinsics.txt
 obj_points_dir: ${source_folder}/obj_points_history
+
+# Depth source configuration
+depth_source: moge_aligned  # Options: "sensor" (default ZED depth), "moge" (MoGe-2 predicted depth), or "moge_aligned" (MoGe-2 aligned with sensor)
+moge_depth_dir: ${paths.data_dir}zed/${recording}/moge_depths  # Path to MoGe-2 depth maps
+moge_aligned_depth_dir: ${paths.data_dir}zed/${recording}/moge_aligned_depths  # Path to aligned MoGe-2 depth maps
 
 use_obj_points: true
 # hardcoded for now

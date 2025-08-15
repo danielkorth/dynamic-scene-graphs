@@ -275,7 +275,7 @@ def load_all_rgb_images(images_dir, max_frames=None, subsample=None):
     
     return np.array(rgb_images)
 
-def load_everything(images_dir, obj_points_dir=None, max_frames=None, subsample=None):
+def load_everything(images_dir, obj_points_dir=None, max_frames=None, subsample=None, depth_dir=None):
     # calc number of images
     rgb_pattern = os.path.join(images_dir, "left*.png")
     rgb_files = sorted(glob.glob(rgb_pattern))
@@ -291,7 +291,12 @@ def load_everything(images_dir, obj_points_dir=None, max_frames=None, subsample=
         rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
         data["rgb"].append(rgb_image)
         # depth
-        depth_file = os.path.join(images_dir, f"depth{i:06d}.png")
+        if depth_dir is not None:
+            # Use alternative depth directory
+            depth_file = os.path.join(depth_dir, f"depth{i:06d}.png")
+        else:
+            # Use default depth path in images directory
+            depth_file = os.path.join(images_dir, f"depth{i:06d}.png")
         depth_image = cv2.imread(depth_file, cv2.IMREAD_UNCHANGED)
         data["depth"].append(depth_image)
         # obj_points
