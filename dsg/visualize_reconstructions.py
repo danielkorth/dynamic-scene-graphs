@@ -9,7 +9,55 @@ from pathlib import Path
 import argparse
 import os
 
-def visualize_reconstructions(reconstructions_folder: str, max_points_per_cloud: int = 10000):
+def reconstruct_mesh_from_pointcloud(pcd: o3d.geometry.PointCloud, poisson_depth: int = 9) -> o3d.geometry.TriangleMesh:
+    """
+    Reconstruct a triangle mesh from a point cloud using Poisson surface reconstruction.
+
+    The function estimates and orients normals if missing, then runs Poisson,
+    prunes low-density vertices, and cleans the resulting mesh.
+
+    Args:
+        pcd: Open3D point cloud
+        poisson_depth: Octree depth for Poisson (higher = more detail, slower)
+
+    Returns:
+        Cleaned Open3D triangle mesh
+    """
+    # Ensure normals exist
+    if not pcd.has_normals():
+        bbox = pcd.get_axis_aligned_bounding_box()
+        diag = np.linalg.norm(bbox.get_max_bound() - bbox.get_min_bound())
+        normal_radius = max(diag * 0.01, 1e-6)
+        pcd.estimate_normals(
+            search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=normal_radius, max_nn=30)
+        )
+        try:
+            pcd.orient_normals_consistent_tangent_plane(k=50)
+        except Exception:
+            # Fallback orientation if consistent orientation fails
+            pcd.orient_normals_to_align_with_direction(np.array([0.0, 0.0, 1.0]))
+
+    # mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+    #     pcd, depth=poisson_depth
+    # )
+    # Remove low-density vertices (trim floating artifacts)
+    # densities = np.asarray(densities)
+    # if densities.size == len(mesh.vertices) and densities.size > 0:
+    #     density_threshold = np.quantile(densities, 0.01)
+    #     to_remove_mask = densities < density_threshold
+    #     mesh.remove_vertices_by_mask(to_remove_mask)
+
+    mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha=0.02)
+
+    # # Clean mesh
+    mesh.remove_duplicated_vertices()
+    mesh.remove_degenerate_triangles()
+    mesh.remove_duplicated_triangles()
+    mesh.remove_non_manifold_edges()
+    # mesh.compute_vertex_normals()
+    return mesh
+
+def visualize_reconstructions(reconstructions_folder: str, max_points_per_cloud: int = 10000, viz_meshes: bool = True):
     """
     Visualize all saved pointclouds from the final_reconstructions folder.
     
@@ -37,7 +85,9 @@ def visualize_reconstructions(reconstructions_folder: str, max_points_per_cloud:
     # Load and prepare pointclouds
     geometries = []
     
-    selected_files = ply_files
+    # selected_files = [ply_files[9]] # 9-umbrella
+    selected_files = [ply_files[0]] # 0-lamp
+    # selected_files = [ply_files[19]]# 19-notebook
     for i, ply_file in enumerate(selected_files):
         print(f"Loading {ply_file.name}...")
         
@@ -59,20 +109,31 @@ def visualize_reconstructions(reconstructions_folder: str, max_points_per_cloud:
                     pcd = pcd.select_by_index(indices)
             
             # Generate unique color for each object if no colors exist
+            rgb = None
             if len(pcd.colors) == 0:
-                # Generate a distinct color based on object index
                 hue = (i * 137.508) % 360  # Golden angle for good color distribution
                 rgb = hsv_to_rgb(hue, 0.7, 0.9)
                 pcd.paint_uniform_color(rgb)
                 print(f"  Applied generated color: {rgb}")
+
+            # Reconstruct mesh from point cloud and visualize that instead
+            if viz_meshes:
+                try:
+                    mesh = reconstruct_mesh_from_pointcloud(pcd)
+                    if (rgb is not None) and (not mesh.has_vertex_colors()):
+                        mesh.paint_uniform_color(rgb)
+                    geometries.append(mesh)
+                    print(f"  Reconstructed mesh: {len(mesh.vertices)} vertices, {len(mesh.triangles)} triangles")
+                except Exception as mesh_err:
+                    print(f"  Mesh reconstruction failed, showing points instead: {mesh_err}")
+                    geometries.append(pcd)
+            else:
+                geometries.append(pcd)
             
-            # Add to visualization list
-            geometries.append(pcd)
-            
-            # Add label
-            label = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-            label.translate(np.mean(pcd.points, axis=0))
-            geometries.append(label)
+            # # Add label
+            # label = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+            # label.translate(np.mean(pcd.points, axis=0))
+            # geometries.append(label)
             
             print(f"  Loaded {len(pcd.points)} points")
             
