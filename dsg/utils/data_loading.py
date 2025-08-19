@@ -142,17 +142,29 @@ def load_camera_intrinsics(config_path, camera='left', resolution='2K'):
     
     section = config[section_name]
     
-    intrinsics = {
-        'fx': float(section['fx']),
-        'fy': float(section['fy']), 
-        'cx': float(section['cx']),
-        'cy': float(section['cy']),
-        'k1': float(section['k1']),
-        'k2': float(section['k2']),
-        'k3': float(section['k3']),
-        'p1': float(section['p1']),
-        'p2': float(section['p2'])
-    }
+    if 'p1' in section:
+        intrinsics = {
+            'fx': float(section['fx']),
+            'fy': float(section['fy']), 
+            'cx': float(section['cx']),
+            'cy': float(section['cy']),
+            'k1': float(section['k1']),
+            'k2': float(section['k2']),
+            'k3': float(section['k3']),
+            'p1': float(section['p1']),
+            'p2': float(section['p2'])
+        }
+    else:
+        intrinsics = {
+            'fx': float(section['fx']),
+            'fy': float(section['fy']), 
+            'cx': float(section['cx']),
+            'cy': float(section['cy']),
+            'k1': float(section['k1']),
+            'k2': float(section['k2']),
+            'k3': float(section['k3']),
+            'k4': float(section['k4']),
+        }
     
     return intrinsics
 
@@ -181,13 +193,21 @@ def get_distortion_coeffs(intrinsics):
     Returns:
         dist_coeffs: numpy array [k1, k2, p1, p2, k3]
     """
-    dist_coeffs = np.array([
-        intrinsics['k1'],
-        intrinsics['k2'], 
-        intrinsics['p1'],
-        intrinsics['p2'],
-        intrinsics['k3']
-    ])
+    if 'p1' in intrinsics:
+        dist_coeffs = np.array([
+            intrinsics['k1'],
+            intrinsics['k2'], 
+            intrinsics['p1'],
+            intrinsics['p2'],
+            intrinsics['k3']
+        ])
+    else:
+        dist_coeffs = np.array([
+            intrinsics['k1'],
+            intrinsics['k2'],
+            intrinsics['k3'],
+            intrinsics['k4'],
+        ])
     return dist_coeffs
 
 def load_rgb_image(images_dir, frame_number):
