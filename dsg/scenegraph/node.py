@@ -16,6 +16,7 @@ class Node:
         self.radius = radius
         self.label = label
         self.pct = pct
+        self.clip_features = None
     
     @property
     def centroid(self):
@@ -54,6 +55,14 @@ class Node:
             self.pct = pct
         else:
             self.pct = np.concatenate([self.pct, pct], axis=0)
+        
+    @property
+    def clip_features(self):
+        return self._clip_features
+
+    @clip_features.setter
+    def clip_features(self, value: np.ndarray):
+        self._clip_features = value
 
 class Edge:
     def __init__(self, source: Node, target: Node):

@@ -3,7 +3,9 @@ from dsg.utils.sam2_utils import (create_overlapping_subsets, mask_first_frame,
 from sam2.build_sam import build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from dsg.features.dinov2 import DINOv2
+from dsg.features.dinov3 import DINOv3
 from dsg.features.salad import SALAD
+from dsg.features.clip_features import CLIPFeatures
 import hydra
 import os
 from PIL import Image
@@ -26,8 +28,10 @@ def main(cfg):
     os.makedirs(obj_points_dir, exist_ok=True)
 
     # Initialize DINOv2 for feature extraction
-    dinov2_extractor = DINOv2()
+    # dinov2_extractor = DINOv2()
     salad_extractor = SALAD()
+    dinov2_extractor = DINOv3()
+    clip_extractor = CLIPFeatures()
 
     # load images
     predictor = build_sam2_video_predictor(
@@ -54,7 +58,7 @@ def main(cfg):
     # dict: obj_id -> points, labels
     # defaultdict: obj_id -> points, labels
     from collections import defaultdict
-    obj_points = defaultdict(lambda: {'points': [], 'labels': [], 'mask': None, 'crop': None, 'dinov2_features': None, 'salad_features': None})
+    obj_points = defaultdict(lambda: {'points': [], 'labels': [], 'mask': None, 'crop': None, 'dinov2_features': None, 'salad_features': None, 'clip_features': None})
     for i, mask in enumerate(masks):
         points = mask['point_coords']
         labels = np.ones(len(points), dtype=np.int32)
@@ -72,6 +76,8 @@ def main(cfg):
         obj_points[i]['dinov2_features'] = dinov2_features.cpu().numpy()
         salad_features = salad_extractor.extract_features(crop_path)
         obj_points[i]['salad_features'] = salad_features.cpu().numpy()
+        clip_vision_features = clip_extractor.extract_vision_features(crop_path)
+        obj_points[i]['clip_features'] = clip_vision_features.cpu().numpy()
 
     # save the points image
     # save_points_image_cv2_obj_id(os.path.join(subsets[0], "000000.jpg"), obj_points, os.path.join(cfg.output_folder, "frame_0_obj_id.png"))
@@ -163,9 +169,10 @@ def main(cfg):
                 # Extract DINOv2 features immediately for new objects
                 dinov2_features = dinov2_extractor.extract_features(crop_path).cpu().numpy()
                 salad_features = salad_extractor.extract_features(crop_path).cpu().numpy()
+                clip_vision_features = clip_extractor.extract_vision_features(crop_path).cpu().numpy()
 
                 ### check if the new object is new
-                new_obj_id = reident_new_masks(obj_points, num_obj_last_it, salad_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
+                new_obj_id = reident_new_masks(obj_points, num_obj_last_it, dinov2_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
                 if new_obj_id == -1:
                     new_obj_id = next_obj_id
                     next_obj_id += 1
@@ -174,6 +181,7 @@ def main(cfg):
                 obj_points[new_obj_id]['crop'] = new_crop
                 obj_points[new_obj_id]['dinov2_features'] = dinov2_features
                 obj_points[new_obj_id]['salad_features'] = salad_features
+                obj_points[new_obj_id]['clip_features'] = clip_vision_features
 
     # At the end of main, after all processing:
     video_fps = getattr(cfg, 'video_fps', 15)
