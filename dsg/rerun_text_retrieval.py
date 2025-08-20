@@ -81,7 +81,7 @@ def main(cfg: DictConfig):
             rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000.0, depth_range=[0, 5000]))
             rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks(obj_points)))
             graph.log_rerun(show_pct=True)
-            graph.highlight_clip_feature_simiarlity()
+            graph.highlight_clip_feature_similarity_progressive()
 
         for obj_id, obj_point in obj_points.items():
             if obj_point['mask'].sum() == 0:

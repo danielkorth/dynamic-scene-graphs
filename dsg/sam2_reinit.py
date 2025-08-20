@@ -27,10 +27,8 @@ def main(cfg):
     obj_points_dir = os.path.join(cfg.source_folder, "obj_points_history")
     os.makedirs(obj_points_dir, exist_ok=True)
 
-    # Initialize DINOv2 for feature extraction
     # dinov2_extractor = DINOv2()
     salad_extractor = SALAD()
-    dinov2_extractor = DINOv3()
     clip_extractor = CLIPFeatures()
 
     # load images
@@ -71,9 +69,6 @@ def main(cfg):
         cv2.imwrite(crop_path, cropped_image)
         obj_points[i]['crop'] = cropped_image
         
-        # Extract DINOv2 features immediately
-        dinov2_features = dinov2_extractor.extract_features(crop_path)
-        obj_points[i]['dinov2_features'] = dinov2_features.cpu().numpy()
         salad_features = salad_extractor.extract_features(crop_path)
         obj_points[i]['salad_features'] = salad_features.cpu().numpy()
         clip_vision_features = clip_extractor.extract_vision_features(crop_path)
@@ -146,16 +141,6 @@ def main(cfg):
         new_regions = hydra.utils.instantiate(cfg.new_objects_fct)(full_mask, mask_generator=auto_segmenter.mask_generator, image=img_last_patch_np)
 
         if len(new_regions) > 0:
-            # if new_regions[0]['mask'] is None and cfg.prompt_with_masks:
-            #     last_img_patch_path = subsets[i] + f"/{len(video_segments)-1:06d}.jpg"
-            #     img_last_patch = Image.open(last_img_patch_path)
-            #     img_last_patch_np = np.array(img_last_patch)
-            #     all_points = np.vstack([new_regions[i]['points'] for i in range(len(new_regions))])
-            #     valids_idx, valid_masks = get_mask_from_points(all_points, img_segmenter, img_last_patch_np, iou_threshold=0.5)
-            #     new_regions = [new_regions[i] for i in valids_idx]
-            #     for v_i, mask in enumerate(valid_masks):
-            #         new_regions[v_i]['mask'] = mask
-            
             obj_points, new_regions = solve_overlap(obj_points, new_regions)
 
             # add new categories
@@ -167,19 +152,17 @@ def main(cfg):
                 crop_path = os.path.join(crop_dir, f"cropped_image_{next_obj_id}.jpg")
                 cv2.imwrite(crop_path, new_crop)
                 # Extract DINOv2 features immediately for new objects
-                dinov2_features = dinov2_extractor.extract_features(crop_path).cpu().numpy()
                 salad_features = salad_extractor.extract_features(crop_path).cpu().numpy()
                 clip_vision_features = clip_extractor.extract_vision_features(crop_path).cpu().numpy()
 
                 ### check if the new object is new
-                new_obj_id = reident_new_masks(obj_points, num_obj_last_it, dinov2_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
+                new_obj_id = reident_new_masks(obj_points, num_obj_last_it, salad_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
                 if new_obj_id == -1:
                     new_obj_id = next_obj_id
                     next_obj_id += 1
 
                 obj_points[new_obj_id]['mask'] = new_region['mask']
                 obj_points[new_obj_id]['crop'] = new_crop
-                obj_points[new_obj_id]['dinov2_features'] = dinov2_features
                 obj_points[new_obj_id]['salad_features'] = salad_features
                 obj_points[new_obj_id]['clip_features'] = clip_vision_features
 

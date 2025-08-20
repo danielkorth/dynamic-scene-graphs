@@ -58,23 +58,6 @@ def main(cfg: DictConfig):
     print(f"Loaded {len(rgb_images)} RGB images and {len(depth_images)} depth images")
     print(f"Loaded {len(tvecs)} poses (translations: {len(tvecs)}, rotations: {len(rvecs)})")
 
-    # rr.log("/", rr.AnnotationContext([  
-    #     rr.AnnotationInfo(id=1, label="red", color=rr.Rgba32([255, 0, 0, 255])),  
-    #     rr.AnnotationInfo(id=2, label="green", color=rr.Rgba32([0, 255, 0, 255]))  
-    # ]), static=True)
-
-#     rr.log(
-#     "masks",  # Applies to all entities below "masks".
-#     rr.AnnotationContext(
-#         [
-#             rr.AnnotationInfo(id=0, label="Background"),
-#             rr.AnnotationInfo(id=1, label="Person", color=(255, 0, 0, 0)),
-#         ],
-#     ),
-#     static=True,
-# )
-    # rr.log("/", rr.AnnotationContext([(1, "red", (255, 0, 0)), (2, "green", (0, 255, 0))]), static=True)
-
     rr.log("world/camera", rr.ViewCoordinates.RDF)
 
     rr.log("world/camera/image", rr.Pinhole(
@@ -83,8 +66,6 @@ def main(cfg: DictConfig):
         focal_length=[intrinsics["fx"], intrinsics["fy"]],
     ), static=True)
 
-    # all_3d_points = []
-    # centers = []
     from scenegraph.graph import SceneGraph
     from scenegraph.node import Node
     graph = SceneGraph()
