@@ -33,3 +33,7 @@ viz: false # visualize the first segmentation
 max_frames: 0  # Max frames to process, 0=no limit (default: 0)
 headless: false
 accumulate_points: true
+
+# Enhanced feature extraction
+multi_res_crop: false  # Enable multi-resolution crop feature extraction
+acc_features: false    # Enable temporal feature accumulation across subsets
