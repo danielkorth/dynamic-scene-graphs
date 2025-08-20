@@ -7,7 +7,7 @@ from scipy.spatial.transform import Rotation
 from dsg.utils.cv2_utils import unproject_image
 import cv2
 
-def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf=False):
+def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf=False, debug_mask=False):
     """
     Process a frame and update the scene graph with either TSDF or point cloud representation.
     
@@ -60,7 +60,7 @@ def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, gra
                 else:
                     node.integrate_pointcloud(points_3d, rgb_points, cfg.accumulate_points, 
                                             camera_intrinsics=K, camera_pose=camera_pose, 
-                                            current_mask=obj_point['mask'], depth_image=depth)
+                                            current_mask=obj_point['mask'], depth_image=depth, obj_id=obj_id)
             
 
 class SceneGraph:

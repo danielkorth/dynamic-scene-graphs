@@ -88,15 +88,18 @@ def main(cfg):
         for obj_id, obj_data in obj_points.items():
             # if we have mask, transfer it. otherwise, use points.
             if obj_data['mask'] is not None:
+                if obj_data['mask'].sum() == 0:
+                    print(f"Empty mask for obj {obj_id} in subset {i}")
+                    continue
                 predictor.add_new_mask(
                     inference_state=inference_state,
                     frame_idx=0,
                     obj_id=obj_id,
                     mask=obj_data['mask']
                 )
-                continue
             # skip empty
             elif len(obj_data['points']) > 0:
+                raise NotImplementedError("Not implemented")
                 _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
                     inference_state=inference_state,
                     frame_idx=0,
@@ -165,7 +168,8 @@ def main(cfg):
                 salad_features = salad_extractor.extract_features(crop_path).cpu().numpy()
 
                 ### check if the new object is new
-                new_obj_id = reident_new_masks(obj_points, num_obj_last_it, salad_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
+                # new_obj_id = reident_new_masks(obj_points, num_obj_last_it, salad_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
+                new_obj_id = -1 # for testing
                 if new_obj_id == -1:
                     new_obj_id = next_obj_id
                     next_obj_id += 1

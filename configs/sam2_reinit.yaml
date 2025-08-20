@@ -5,7 +5,7 @@ defaults:
   - _self_
 
 # needs to be provided
-recording: zed_mini
+recording: game_dyn
 
 # Input/Output Paths  
 source_folder: ${paths.data_dir}zed/${recording}

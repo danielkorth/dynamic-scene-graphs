@@ -340,15 +340,15 @@ class Node:
         
         # For planes, use area instead of volume
         if is_plane and bbox_area > AREA_THRESHOLD:
-            print(f"Plane detected: volume={bbox_volume:.6f}, area={bbox_area:.6f}, threshold={AREA_THRESHOLD}")
+            # print(f"Plane detected: volume={bbox_volume:.6f}, area={bbox_area:.6f}, threshold={AREA_THRESHOLD}")
             occ_percentage = calculate_occlusion_percentage(self.pct, current_mask, depth_image, camera_intrinsics, camera_pose, depth_tolerance=0.01, visualize=False)
-            print(f"Occ percentage: {occ_percentage}")
+            # print(f"Occ percentage: {occ_percentage}")
             if occ_percentage > OCC_THRESHOLD:
                 return "ignore"
             else:
                 return "accumulate" 
         elif is_plane and bbox_area < SIZE_WRT_PREV*self._calculate_bbox_area(self.pct)[0]:
-            print(f"Plane detected but area small wrt previous -> ignoring")
+            # print(f"Plane detected but area small wrt previous -> ignoring")
             return "ignore"
         
         # If volume is too large, replace instead of accumulate
@@ -359,8 +359,8 @@ class Node:
 
         occ_percentage = calculate_occlusion_percentage(self.pct, current_mask, depth_image, camera_intrinsics, camera_pose, depth_tolerance=0.01, visualize=False)
         if bbox_volume < SIZE_WRT_PREV*self.max_vol or occ_percentage > OCC_THRESHOLD:
-            print(f"Volume small wrt previous -> ignoring")
-            print(f"Occ percentage: {occ_percentage}")
+            # print(f"Volume small wrt previous -> ignoring")
+            # print(f"Occ percentage: {occ_percentage}")
             return "ignore"
         
         # Check if object is moving to decide between merge and accumulate
@@ -476,7 +476,7 @@ class Node:
 
     def integrate_pointcloud(self, points_3d: np.ndarray, rgb_points: np.ndarray, accumulate_points: bool = False, visualize: bool = False,
                            camera_intrinsics: np.ndarray = None, camera_pose: np.ndarray = None, 
-                           current_mask: np.ndarray = None, depth_image: np.ndarray = None):
+                           current_mask: np.ndarray = None, depth_image: np.ndarray = None, obj_id: int = None):
         """
         Integrate new pointcloud using global registration followed by ICP.
         Also visualize the input pointcloud and its bounding box volume.
@@ -494,6 +494,8 @@ class Node:
         # Check if we should replace the pointcloud instead of accumulating
         aggregation = self._should_replace_pointcloud(points_3d, accumulate_points, 
                                                     camera_intrinsics, camera_pose, current_mask, depth_image)
+        if obj_id is not None and obj_id in [3, 24, 16]:
+            aggregation = "replace"
 
         # Visualization of the input pointcloud and its bounding box
         if visualize:
@@ -676,8 +678,8 @@ class Node:
                                           outside_percentage*100, outside_points_threshold*100)
                 
         # Object is considered moving if more than threshold percentage of points are outside the mask
-        if moving:
-            print(f"Object {self.name} is moving with {outside_percentage*100:.1f}% outside points ({outside_mask_count}/{total_points})")
+        # if moving:
+        #     print(f"Object {self.name} is moving with {outside_percentage*100:.1f}% outside points ({outside_mask_count}/{total_points})")
         return moving
     
 
