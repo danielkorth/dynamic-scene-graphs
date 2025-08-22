@@ -13,6 +13,22 @@ body {
     margin-bottom: 5px;
 }
 
+/* Fix button text color for dark buttons */
+.link-block a.button.is-dark,
+.link-block a.button.is-dark:hover,
+.link-block a.button.is-dark:focus {
+    color: #fff !important;
+    text-decoration: none !important;
+}
+
+/* Also target the external-link class specifically */
+.external-link.button.is-dark,
+.external-link.button.is-dark:hover,
+.external-link.button.is-dark:focus {
+    color: #fff !important;
+    text-decoration: none !important;
+}
+
 .dnerf {
   font-variant: small-caps;
 }
