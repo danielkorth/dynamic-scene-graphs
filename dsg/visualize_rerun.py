@@ -81,22 +81,35 @@ def main(cfg: DictConfig):
         rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000.0, depth_range=[0, 5000]))
         rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks(obj_points)))
 
+        # Reset visibility for all existing nodes
+        for node_name in graph.nodes:
+            graph.nodes[node_name].visible = False
+
         for obj_id, obj_point in obj_points.items():
-            if obj_point['mask'].sum() == 0:
+            is_visible = obj_point['mask'].sum() > 0
+
+            if not is_visible:
                 continue
+
             points_3d, _ = unproject_image(depth, K, -rvec, tvec, mask=obj_point['mask'], dist=None)
             centroid = np.mean(points_3d, axis=0)
 
             if f"obj_{obj_id}" not in graph:
                 # Generate unique color for this object
                 color = np.array(get_color_for_id(obj_id))
-                graph.add_node(Node(f"obj_{obj_id}", centroid, color=color, pct=points_3d))
+                node = Node(f"obj_{obj_id}", centroid, color=color, pct=points_3d)
+                node.visible = True
+                graph.add_node(node)
             else:
+                node = graph.nodes[f'obj_{obj_id}']
+                node.visible = True  # Mark as visible
+
+                # Only accumulate/update points for visible nodes
                 if cfg.accumulate_points:
-                    graph.nodes[f'obj_{obj_id}'].pct = np.vstack([graph.nodes[f'obj_{obj_id}'].pct, points_3d])
+                    node.pct = np.vstack([node.pct, points_3d])
                 else:
-                    graph.nodes[f'obj_{obj_id}'].pct = points_3d
-                graph.nodes[f'obj_{obj_id}'].centroid = centroid
+                    node.pct = points_3d
+                node.centroid = centroid
 
         print("Graph size: ", len(graph))
 

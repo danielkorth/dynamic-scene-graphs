@@ -17,22 +17,32 @@ class SceneGraph:
     def __contains__(self, node_name: str):
         return node_name in self.nodes
     
-    def log_rerun(self, show_pct: bool = False, max_points: int = 5000):
+    def log_rerun(self, show_pct: bool = False, max_points: int = 3000):
         # edges = rr.LineStrips3D(strips=np.array([[edge.source.centroid, edge.target.centroid] for edge in self.edges]))
         # rr.log("world/edges", edges)
         for node_name in self.nodes:
-            if show_pct:
+            node = self.nodes[node_name]
+
+            # Only resample points if node is visible and has points
+            if show_pct and node.pct is not None and node.visible:
+                # Resample points only for visible nodes
+                sampled_points = node.pct[np.random.choice(
+                    node.pct.shape[0],
+                    min(max_points, node.pct.shape[0]),
+                    replace=False
+                )]
                 rr.log(f"world/points/{node_name}", rr.Points3D(
-                    # sample max_points points
-                    positions=self.nodes[node_name].pct[np.random.choice(self.nodes[node_name].pct.shape[0], min(max_points, self.nodes[node_name].pct.shape[0]), replace=False)], 
+                    positions=sampled_points,
                     radii=0.005,
-                    class_ids=np.array([self.nodes[node_name].id] * self.nodes[node_name].pct.shape[0]))
-                )
+                    class_ids=np.array([node.id] * sampled_points.shape[0])
+                ))
+
+            # Always log centroids
             rr.log(f"world/centroids/{node_name}", rr.Points3D(
-                positions=self.nodes[node_name].centroid, 
+                positions=node.centroid,
                 radii=0.03,
-                class_ids=np.array([self.nodes[node_name].id] * self.nodes[node_name].pct.shape[0]))
-            )
+                class_ids=np.array([node.id] * node.pct.shape[0]) if node.pct is not None else np.array([node.id])
+            ))
 
     def highlight_clip_feature_similarity(self, text: str = "football", max_points: int = 5000):
         from dsg.features.clip_features import CLIPFeatures

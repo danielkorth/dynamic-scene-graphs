@@ -17,6 +17,7 @@ class Node:
         self.label = label
         self.pct = pct
         self.clip_features = None
+        self.visible = True  # Track visibility state
     
     @property
     def centroid(self):
@@ -63,6 +64,14 @@ class Node:
     @clip_features.setter
     def clip_features(self, value: np.ndarray):
         self._clip_features = value
+
+    @property
+    def visible(self):
+        return self._visible
+
+    @visible.setter
+    def visible(self, value: bool):
+        self._visible = value
 
 class Edge:
     def __init__(self, source: Node, target: Node):
