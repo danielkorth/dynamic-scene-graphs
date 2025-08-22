@@ -33,7 +33,7 @@ class SceneGraph:
                 )]
                 rr.log(f"world/points/{node_name}", rr.Points3D(
                     positions=sampled_points,
-                    radii=0.005,
+                    radii=0.010,
                     class_ids=np.array([node.id] * sampled_points.shape[0])
                 ))
 
