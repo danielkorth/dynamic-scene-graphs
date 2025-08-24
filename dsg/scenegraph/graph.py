@@ -17,9 +17,27 @@ class SceneGraph:
     def __contains__(self, node_name: str):
         return node_name in self.nodes
     
-    def log_rerun(self, show_pct: bool = False, max_points: int = 5000):
-        # edges = rr.LineStrips3D(strips=np.array([[edge.source.centroid, edge.target.centroid] for edge in self.edges]))
-        # rr.log("world/edges", edges)
+    def log_rerun(self, show_pct: bool = False, max_points: int = 5000, edge_threshold: float = 1.0):
+        # Create edges between nodes that are closer than edge_threshold meters
+        edge_strips = []
+        edge_colors = []
+
+        node_list = list(self.nodes.values())
+        for i in range(len(node_list)):
+            for j in range(i + 1, len(node_list)):
+                node1 = node_list[i]
+                node2 = node_list[j]
+                distance = np.linalg.norm(node1.centroid - node2.centroid)
+                if distance < edge_threshold:
+                    edge_strips.append([node1.centroid, node2.centroid])
+                    edge_colors.append([255, 255, 255, 255])  # White color for edges
+
+        if edge_strips:
+            rr.log("world/edges", rr.LineStrips3D(
+                strips=np.array(edge_strips),
+                colors=np.array(edge_colors)
+            ))
+
         for node_name in self.nodes:
             if show_pct:
                 rr.log(f"world/points/{node_name}", rr.Points3D(
