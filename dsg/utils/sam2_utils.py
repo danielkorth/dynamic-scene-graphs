@@ -651,6 +651,9 @@ def detect_with_automask(full_mask, **kwargs):
     point_grid = [mask_points(pg, ~full_mask) for pg in point_grid]
     new_points = mask_points(point_grid[0], ~full_mask)
 
+    if new_points.shape[0] == 0:
+        return []
+
     # # visualize the point grid over the image
     # if kwargs['viz']:
     #     # rescale points

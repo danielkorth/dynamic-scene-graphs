@@ -225,6 +225,12 @@ def main(cfg):
         obj_points[i]['mask'] = mask['segmentation'].squeeze()
 
         cropped_image = sv.crop_image(img_np, mask_to_xyxy(mask['segmentation'][None, ...]))
+
+        # Check if crop is valid (not empty)
+        if cropped_image is None or cropped_image.size == 0:
+            print(f"Warning: Empty crop for object {i}, skipping object initialization")
+            continue
+
         crop_path = os.path.join(crop_dir, f"cropped_image_{i}.jpg")
         # Convert RGB to BGR for cv2.imwrite
         cropped_image_bgr = cv2.cvtColor(cropped_image, cv2.COLOR_RGB2BGR)
@@ -318,6 +324,12 @@ def main(cfg):
                 if obj_id in obj_points:
                     # Get crop from the last frame of current subset
                     crop = sv.crop_image(last_frame_np, mask_to_xyxy(mask))
+
+                    # Check if crop is valid (not empty)
+                    if crop is None or crop.size == 0:
+                        print(f"Warning: Empty crop for object {obj_id}, skipping feature extraction")
+                        continue
+
                     temp_crop_path = os.path.join(crop_dir, f"temp_crop_{obj_id}.jpg")
                     # Convert RGB to BGR for cv2.imwrite
                     crop_bgr = cv2.cvtColor(crop, cv2.COLOR_RGB2BGR)
@@ -341,7 +353,9 @@ def main(cfg):
                         new_salad_features = salad_extractor.extract_features(temp_crop_path).cpu().numpy()
                         new_clip_features = clip_extractor.extract_vision_features(temp_crop_path).cpu().numpy()
 
-                    # Update running average
+                    # Update direct features and running average
+                    obj_points[obj_id]['salad_features'] = new_salad_features
+                    obj_points[obj_id]['clip_features'] = new_clip_features
                     update_running_average(obj_points[obj_id], new_salad_features, new_clip_features)
 
                     # Clean up temp file
@@ -373,6 +387,12 @@ def main(cfg):
             for j, new_region in enumerate(new_regions):
                 ### get crop and extract features
                 new_crop = sv.crop_image(img_last_patch_np, mask_to_xyxy(new_region['mask'][None, ...]))
+
+                # Check if crop is valid (not empty)
+                if new_crop is None or new_crop.size == 0:
+                    print(f"Warning: Empty crop for new object {next_obj_id}, skipping object")
+                    continue
+
                 crop_path = os.path.join(crop_dir, f"cropped_image_{next_obj_id}.jpg")
                 # Convert RGB to BGR for cv2.imwrite
                 new_crop_bgr = cv2.cvtColor(new_crop, cv2.COLOR_RGB2BGR)
@@ -404,7 +424,7 @@ def main(cfg):
                     # rather than running averages to detect appearance changes
                     comparison_features = salad_features
 
-                new_obj_id = reident_new_masks(obj_points, num_obj_last_it, comparison_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
+                new_obj_id = reident_new_masks(obj_points, num_obj_last_it, comparison_features, threshold=cfg.reid_threshold, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
                 if new_obj_id == -1:
                     new_obj_id = next_obj_id
                     next_obj_id += 1

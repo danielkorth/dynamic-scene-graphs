@@ -76,6 +76,7 @@ def main(cfg: DictConfig):
         resolution=[first_rgb.shape[1], first_rgb.shape[0]],
         principal_point=[intrinsics["cx"], intrinsics["cy"]],
         focal_length=[intrinsics["fx"], intrinsics["fy"]],
+        image_plane_distance=0.25,
     ), static=True)
 
     # Clean up first frame to save memory
@@ -164,7 +165,9 @@ def main(cfg: DictConfig):
 
             print(f"Graph size: {len(graph)} (updated at frame {i})")
 
-            graph.log_rerun(show_pct=True)
+            # Pass current timestep for animation transitions
+            # You can adjust transition_start, transition_duration, and final_edge_thickness here
+            graph.log_rerun(show_pct=True, timestep=i, transition_start=900, transition_duration=200, final_edge_thickness=0.008)
 
             # Clean up object points after graph update
             del obj_points
@@ -174,18 +177,19 @@ def main(cfg: DictConfig):
 
         # Log graph - only show point clouds on update frames to avoid expensive sampling
         if should_update_graph:
-            graph.log_rerun(show_pct=True)  # Full logging with point clouds
-        else:
+            # Pass current timestep for animation transitions
+            graph.log_rerun(show_pct=True, timestep=i, transition_start=900, transition_duration=200, final_edge_thickness=0.015)  # Full logging with point clouds
+        # else:
             # For non-update frames, skip expensive point cloud sampling but still log centroids
             # This provides smooth camera movement without expensive computation
-            for node_name in graph.nodes:
-                node = graph.nodes[node_name]
-                # Only log centroids, skip point cloud sampling
-                rr.log(f"world/centroids/{node_name}", rr.Points3D(
-                    positions=node.centroid,
-                    radii=0.03,
-                    class_ids=np.array([node.id])
-                ))
+            # for node_name in graph.nodes:
+            #     node = graph.nodes[node_name]
+            #     # Only log centroids, skip point cloud sampling
+            #     rr.log(f"world/centroids/{node_name}", rr.Points3D(
+            #         positions=node.centroid,
+            #         radii=0.08,  # Match the radius used in graph.log_rerun()
+            #         class_ids=np.array([node.id])
+            #     ))
 
         # LOG CAMERA TRAJECTORY
         if i > 0:
