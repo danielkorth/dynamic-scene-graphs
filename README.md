@@ -1,11 +1,19 @@
 <div align="center">
 
-# Dynamic Scene Graphs from RGB-D
+# Dynamic 3D Scene Graphs from RGB-D
 [Daniel Korth](https://danielkorth.io/)<sup>1</sup>, [Xavi Anadon](https://x.com/XaviXva)<sup>2</sup> <br>
 <sup>1</sup>Technical University of Munich, <sup>2</sup>University of Zaragoza
 
 [Project Page](https://danielkorth.github.io/sfm-reconstruction-priors/) | [Slides](docs/static/pdfs/slides.pdf) | [Video](https://youtu.be/tMiMO2Wnj8Q)
+
+
+
+https://github.com/user-attachments/assets/0115fc38-ac2c-45b3-94f3-728af601169e
+
+
 </div>
+
+
 
 Work done during 2 month ETH SSRF / RSL internship. Advised by Zuria Bauer and Daniel Barath.
 
