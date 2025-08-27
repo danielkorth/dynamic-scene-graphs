@@ -1,4 +1,0 @@
-# Base configuration for dynamic scene graphs project
-defaults:
-  - paths: default
-  - _self_

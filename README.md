@@ -32,38 +32,50 @@ pip install -e .
 The project expects the following folder structure for data:
 
 ```bash
+# Download example dataset
 sh scripts/download_redwood.sh
 ```
 
-which creates the following structure:
+For ZED camera recordings, the expected structure is:
 ```
 data/
-  living_room_1/
-    color/
-    depth/
-    livingroom.ply
-    livingroom1-traj.txt
+  zed/
+    {recording_name}/
+      images/                    # Original RGB images
+      poses.txt                  # Camera poses
+      intrinsics.txt             # Camera intrinsics
+      images_undistorted_crop/   # Undistorted RGB images (after step 3)
+      masks_{stride}_{max_frames}/     # SAM2 segmentation masks
+      mask_images_{stride}_{max_frames}/ # Visualization of masks
+      obj_points_history/        # 3D object point clouds
 ```
 
 ## Workflow
 
-Understanding the workflow:
-1. Record data and save a .svo2 file
-2. scripts/extract_zed.sh -> create data/zed/{file_name}/images/ and data/zed/{file_name}/poses.txt
-    -> I need the correct intrinsics and distortion coefficients in this folder!!!
+1. **Record data with ZED camera** and save as .svo2 file
+
+2. **Extract frames and poses:**
+   ```bash
+   sh scripts/extract_zed.sh
+   ```
+   Creates `data/zed/{recording_name}/images/` and `poses.txt`
+
 3. **Undistort the images:**
    ```bash
    # Basic undistortion (no cropping)
-   python src/undistort.py recording=<file_name>
-   
+   python src/undistort.py recording=<recording_name>
+
    # Undistortion with automatic cropping (removes black regions)
-   python src/undistort.py recording=<file_name> undistort=true
+   python src/undistort.py recording=<recording_name> undistort=true
    ```
 
 4. **Run SAM2 multitrack segmentation:**
-```bash
-   # Process every 5th frame with max 100 frames
-   python src/sam2_tracking.py recording=<file_name> stride=5 max_frames=100 sam=tiny
-```
+   ```bash
+   # Process every 10th frame with max 100 frames
+   python src/sam2_tracking.py recording=<recording_name> stride=10 max_frames=100 sam=tiny
+   ```
 
-5. run visualize_rerun.py 
+5. **Visualize and build scene graph:**
+   ```bash
+   python src/visualize_rerun.py
+   ``` 
