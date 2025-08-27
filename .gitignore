@@ -17,3 +17,4 @@ uv.lock
 outputs/*
 sam2/notebooks/*
 multirun/*
+.cursor/*

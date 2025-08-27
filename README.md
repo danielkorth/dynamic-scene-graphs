@@ -4,7 +4,7 @@
 [Daniel Korth](https://danielkorth.io/)<sup>1</sup>, [Xavi Anadon](https://x.com/XaviXva)<sup>2</sup> <br>
 <sup>1</sup>Technical University of Munich, <sup>2</sup>University of Zaragoza
 
-[Project Page](https://danielkorth.github.io/sfm-reconstruction-priors/) | [Slides](docs/static/pdfs/slides.pdf) | [Video](https://youtu.be/tMiMO2Wnj8Q)
+[Project Page](https://danielkorth.github.io/dynamic-scene-graphs/) | [Video](https://youtu.be/tMiMO2Wnj8Q)
 </div>
 
 Work done during 2 month ETH SSRF / RSL internship. Advised by Zuria Bauer and Daniel Barath.
