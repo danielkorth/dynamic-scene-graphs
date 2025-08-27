@@ -20,7 +20,7 @@ use_obj_points: true
 # hardcoded for now
 
 # Frame configs
-subsample: 5 # subsample factor on original frames
+subsample: 10 # subsample factor on original frames
 chunk_size: 10 # chunk size of overlapping subsets
 overlap: 1 # overlap between chunks
 
@@ -37,3 +37,4 @@ accumulate_points: true
 # Enhanced feature extraction
 multi_res_crop: false  # Enable multi-resolution crop feature extraction
 acc_features: false    # Enable temporal feature accumulation across subsets
+use_tsdf: false  # Use TSDF volume representation instead of point clouds
