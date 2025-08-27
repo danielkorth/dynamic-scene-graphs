@@ -9,6 +9,7 @@ from dsg.utils.cv2_utils import unproject_image
 import hydra
 from omegaconf import DictConfig
 from dsg.scenegraph.graph import SceneGraph, process_frame_with_representation
+from dsg.scenegraph.node import Node
 import open3d as o3d
 
 def aggregate_masks(obj_points, default_shape=None):
@@ -85,36 +86,27 @@ def main(cfg: DictConfig):
 
     line_strips = []
 
-    # Check if we should use TSDF representation
-    use_tsdf = getattr(cfg, 'use_tsdf', False)
-    print(f"Using TSDF representation: {use_tsdf}")
-
-    # Load all data at once (original approach)
-    rgb_images = []
-    depth_images = []
-    obj_points_list = []
-
+    # Process frames one at a time with lazy loading
     for i in range(num_frames):
+        # Load data for current frame on-demand
         frame_idx = i * cfg.subsample if cfg.subsample > 0 else i
 
-        rgb = load_rgb_image(cfg.images_folder, frame_idx)
-        depth = load_depth_image(cfg.images_folder, frame_idx)
+        # Always load RGB, depth, and poses every frame for smooth visualization
+        try:
+            rgb = load_rgb_image(cfg.images_folder, frame_idx)
+        except FileNotFoundError:
+            print(f"Warning: Could not load RGB image for frame {frame_idx}, skipping")
+            continue
 
-        if cfg.obj_points_dir is not None:
-            obj_points_file = os.path.join(cfg.obj_points_dir, f"obj_points_{frame_idx}.npy")
-            if os.path.exists(obj_points_file):
-                obj_points = load_obj_points(obj_points_file)
-            else:
-                obj_points = {}
-        else:
-            obj_points = {}
+        try:
+            depth = load_depth_image(cfg.images_folder, frame_idx)
+        except FileNotFoundError:
+            print(f"Warning: Could not load depth image for frame {frame_idx}, skipping")
+            continue
 
-        rgb_images.append(rgb)
-        depth_images.append(depth)
-        obj_points_list.append(obj_points)
-
-    # Process all frames at once
-    for i, (rgb, depth, tvec, rvec, obj_points) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs, obj_points_list)):
+        # Get poses for this frame (already loaded efficiently)
+        tvec = tvecs[i]
+        rvec = rvecs[i]
         rr.log("world/camera", rr.Transform3D(
             mat3x3=Rotation.from_rotvec(rvec).as_matrix(),
             translation=tvec,
@@ -122,11 +114,69 @@ def main(cfg: DictConfig):
         rr.log("world/camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
         rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000.0, depth_range=[0, 5000]))
 
-        # Process frame with chosen representation
-        process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf)
+        # Only update scene graph every N frames to reduce computation
+        should_update_graph = (i % cfg.graph_update_every == 0)
 
-        # Log graph using original log_rerun function
-        graph.log_rerun(show_pct=True)
+        if should_update_graph:
+            # Load object points only when updating graph
+            if cfg.obj_points_dir is not None:
+                obj_points_file = os.path.join(cfg.obj_points_dir, f"obj_points_{frame_idx}.npy")
+                if os.path.exists(obj_points_file):
+                    obj_points = load_obj_points(obj_points_file)
+                else:
+                    obj_points = {}  # Empty dict if no object points file
+            else:
+                obj_points = {}
+
+            # Log masks
+            rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks(obj_points)))
+
+            # Reset visibility for all existing nodes
+            for node_name in graph.nodes:
+                graph.nodes[node_name].visible = False
+
+            for obj_id, obj_point in obj_points.items():
+                is_visible = obj_point['mask'].sum() > 0
+
+                if not is_visible:
+                    continue
+
+                points_3d, _ = unproject_image(depth, K, -rvec, tvec, mask=obj_point['mask'], dist=None)
+                centroid = np.mean(points_3d, axis=0)
+
+                if f"obj_{obj_id}" not in graph:
+                    # Generate unique color for this object
+                    color = np.array(get_color_for_id(obj_id))
+                    node = Node(f"obj_{obj_id}", centroid, color=color, pct=points_3d)
+                    node.visible = True
+                    graph.add_node(node)
+                else:
+                    node = graph.nodes[f'obj_{obj_id}']
+                    node.visible = True  # Mark as visible
+
+                    # Only accumulate/update points for visible nodes
+                    if cfg.accumulate_points:
+                        node.pct = np.vstack([node.pct, points_3d])
+                    else:
+                        node.pct = points_3d
+                    node.centroid = centroid
+
+            print(f"Graph size: {len(graph)} (updated at frame {i})")
+
+            # Pass current timestep for animation transitions
+            # You can adjust transition_start, transition_duration, and final_edge_thickness here
+            graph.log_rerun_teaser(show_pct=True, timestep=i, transition_start=900, transition_duration=200, final_edge_thickness=0.008)
+
+            # Clean up object points after graph update
+            del obj_points
+        else:
+            # For non-graph-update frames, use empty object points for mask logging
+            rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks({}, default_shape=depth.shape)))
+
+        # Log graph - only show point clouds on update frames to avoid expensive sampling
+        if should_update_graph:
+            # Pass current timestep for animation transitions
+            graph.log_rerun_teaser(show_pct=True, timestep=i, transition_start=900, transition_duration=200, final_edge_thickness=0.015)  # Full logging with point clouds
 
         # LOG CAMERA TRAJECTORY
         if i > 0:
@@ -138,40 +188,8 @@ def main(cfg: DictConfig):
 
         rr.set_time(timeline="world", sequence=i)
 
-    # Save Open3D textured pointclouds for each node
-    save_textured_pointclouds(graph, cfg.source_folder)
-
-
-def save_textured_pointclouds(graph, source_folder):
-    """
-    Save textured point clouds for all nodes in the scene graph as PLY files.
-
-    Args:
-        graph: SceneGraph object containing nodes with point cloud data
-        source_folder: Base folder path where reconstructions will be saved
-    """
-    print("Saving textured pointclouds for all nodes...")
-
-    # Create output directory
-    output_dir = Path(source_folder) / "final_reconstructions"
-    output_dir.mkdir(exist_ok=True)
-
-    # Save pointcloud for each node
-    for node_name, node in graph.nodes.items():
-        if node.pct is not None and node.rgb is not None and len(node.pct) > 0:
-            # Create Open3D pointcloud
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(node.pct)
-            pcd.colors = o3d.utility.Vector3dVector(node.rgb)  # Normalize RGB values to [0,1]
-
-            # Save as PLY file
-            output_file = output_dir / f"{node_name}_textured.ply"
-            o3d.io.write_point_cloud(str(output_file), pcd)
-            print(f"Saved {node_name} pointcloud with {len(node.pct)} points to {output_file}")
-        else:
-            print(f"Skipping {node_name} - no valid pointcloud data")
-
-    print(f"All pointclouds saved to {output_dir}")
+        # Clean up frame data to prevent memory accumulation
+        del rgb, depth
 
 
 if __name__ == "__main__":
