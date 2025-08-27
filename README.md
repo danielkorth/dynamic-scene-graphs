@@ -20,10 +20,10 @@ tl;dr: ZED i2 RGB-D recording -> poses -> SAM2 multitrack segmentation -> scene 
 
 
 ```bash
-conda create -n dsg python=3.11
+conda create -n dsg python=3.10
 conda activate dsg
 pip install uv 
-uv pip install -r requirements.txt
+uv pip install -e .
 # installing sam2
 cd sam2
 uv pip install -e .

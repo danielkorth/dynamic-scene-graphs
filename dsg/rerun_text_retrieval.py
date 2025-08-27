@@ -1,14 +1,11 @@
 from pathlib import Path
-import argparse
 import rerun as rr
-from utils.colmap_utils import load_colmap_poses
-from utils.data_loading import load_poses, load_camera_intrinsics, load_all_rgb_images, load_all_depth_images, load_all_masks, get_camera_matrix, get_distortion_coeffs, load_all_points
-from utils.rerun import setup_blueprint
-from utils.tools import get_color_for_id
+from dsg.utils.data_loading import load_poses, get_camera_matrix
+from dsg.utils.rerun import setup_blueprint
+from dsg.utils.tools import get_color_for_id
 import numpy as np
 from scipy.spatial.transform import Rotation
-from utils.cv2_utils import unproject_image
-import time
+from dsg.utils.cv2_utils import unproject_image
 import hydra
 from omegaconf import DictConfig
 
@@ -43,11 +40,6 @@ def main(cfg: DictConfig):
         }
     K = get_camera_matrix(intrinsics)
 
-    # with distortion
-    # intrinsics = load_camera_intrinsics("./data/SN35693142.conf", camera="left", resolution="HD")
-    # K = get_camera_matrix(intrinsics)
-    # dist = get_distortion_coeffs(intrinsics)
-
     from utils.data_loading import load_everything
     data = load_everything(cfg.images_folder, cfg.obj_points_dir, max_frames=cfg.max_frames, subsample=cfg.subsample)
 
@@ -60,23 +52,6 @@ def main(cfg: DictConfig):
 
     print(f"Loaded {len(rgb_images)} RGB images and {len(depth_images)} depth images")
     print(f"Loaded {len(tvecs)} poses (translations: {len(tvecs)}, rotations: {len(rvecs)})")
-
-    # rr.log("/", rr.AnnotationContext([  
-    #     rr.AnnotationInfo(id=1, label="red", color=rr.Rgba32([255, 0, 0, 255])),  
-    #     rr.AnnotationInfo(id=2, label="green", color=rr.Rgba32([0, 255, 0, 255]))  
-    # ]), static=True)
-
-#     rr.log(
-#     "masks",  # Applies to all entities below "masks".
-#     rr.AnnotationContext(
-#         [
-#             rr.AnnotationInfo(id=0, label="Background"),
-#             rr.AnnotationInfo(id=1, label="Person", color=(255, 0, 0, 0)),
-#         ],
-#     ),
-#     static=True,
-# )
-    # rr.log("/", rr.AnnotationContext([(1, "red", (255, 0, 0)), (2, "green", (0, 255, 0))]), static=True)
 
     rr.log("world/camera", rr.ViewCoordinates.RDF)
 
@@ -94,14 +69,19 @@ def main(cfg: DictConfig):
 
     line_strips = []
 
+    # log the points from last timestep
+
     for i, (rgb, depth, tvec, rvec, obj_points) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs, obj_points)):
-        rr.log("world/camera", rr.Transform3D(
-            mat3x3=Rotation.from_rotvec(rvec).as_matrix(),
-            translation=tvec,
-        ))
-        rr.log("world/camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
-        rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000.0, depth_range=[0, 5000]))
-        rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks(obj_points)))
+        if i == len(tvecs) - 1:
+            rr.log("world/camera", rr.Transform3D(
+                mat3x3=Rotation.from_rotvec(rvec).as_matrix(),
+                translation=tvec,
+            ))
+            rr.log("world/camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
+            rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000.0, depth_range=[0, 5000]))
+            rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks(obj_points)))
+            graph.log_rerun(show_pct=True)
+            graph.highlight_clip_feature_similarity_progressive(text=cfg.text)
 
         for obj_id, obj_point in obj_points.items():
             if obj_point['mask'].sum() == 0:
@@ -119,18 +99,7 @@ def main(cfg: DictConfig):
                 else:
                     graph.nodes[f'obj_{obj_id}'].pct = points_3d
                 graph.nodes[f'obj_{obj_id}'].centroid = centroid
-
-        print("Graph size: ", len(graph))
-
-        graph.log_rerun(show_pct=True)
-
-        # LOG CAMERA TRAJECTORY
-        if i > 0:
-            line_strips.append(np.array([tvecs[i-1], tvecs[i]]))
-            rr.log("world/trajectory", rr.LineStrips3D(
-                strips=np.array(line_strips),
-                colors=np.array([[255, 0, 0, 255]] * len(line_strips)),
-            ))
+            graph.nodes[f'obj_{obj_id}'].clip_features = obj_point['clip_features']
 
         rr.set_time(timeline="world", sequence=i)
 

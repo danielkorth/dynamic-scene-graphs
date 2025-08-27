@@ -15,9 +15,9 @@ import matplotlib.pyplot as plt
 
 # SAM2 imports
 from sam2.build_sam import build_sam2_video_predictor
-from utils.sam2_utils import (mask_first_frame_interactive, save_sam, 
+from dsg.utils.sam2_utils import (mask_first_frame_interactive, save_sam, 
                               propagate_video_plain, mask_first_frame)
-from segment import SAM2Segmenter
+from dsg.segment import SAM2Segmenter
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="sam2_tracking")

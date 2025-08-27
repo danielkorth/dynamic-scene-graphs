@@ -1,4 +1,4 @@
-_target_: sam2_reinit.detect_with_cc
+_target_: dsg.utils.sam2_utils.detect_with_cc
 _partial_: true
 buffer_radius: 10
 area_per_sample: 100
