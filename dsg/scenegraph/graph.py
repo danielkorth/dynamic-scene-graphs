@@ -75,8 +75,9 @@ class SceneGraph:
     
     def __contains__(self, node_name: str):
         return node_name in self.nodes
-    
+
     def log_rerun(self, show_pct: bool = False, max_points: int = 5000, edge_threshold: float = 1.0):
+        """Log scene graph to rerun"""
         # Create edges between nodes that are closer than edge_threshold meters
         edge_strips = []
         edge_colors = []
@@ -98,18 +99,192 @@ class SceneGraph:
             ))
 
         for node_name in self.nodes:
-            if show_pct:
+            node = self.nodes[node_name]
+            if show_pct and node.pct is not None and node.visible:
+                # Resample points only for visible nodes
+                sampled_points = node.pct[np.random.choice(
+                    node.pct.shape[0],
+                    min(max_points, node.pct.shape[0]),
+                    replace=False
+                )]
+
+                # Get base color from node's color (RGB 0-1 from get_color_for_id)
+                base_color = node.color
+                if base_color is not None and len(base_color) == 3:
+                    # Convert RGB 0-1 to RGB 0-255 for rerun
+                    r, g, b = base_color
+                    point_color = np.array([
+                        int(r * 255),
+                        int(g * 255),
+                        int(b * 255)
+                    ])
+                    # Apply color to all points
+                    point_colors = np.tile(point_color, (sampled_points.shape[0], 1))
+                else:
+                    # Fallback to class_ids for coloring
+                    point_colors = None
+
                 rr.log(f"world/points/{node_name}", rr.Points3D(
-                    # sample max_points points
-                    positions=self.nodes[node_name].pct[np.random.choice(self.nodes[node_name].pct.shape[0], min(max_points, self.nodes[node_name].pct.shape[0]), replace=False)], 
-                    radii=0.005,
-                    class_ids=np.array([self.nodes[node_name].id] * self.nodes[node_name].pct.shape[0]))
-                )
-            rr.log(f"world/centroids/{node_name}", rr.Points3D(
-                positions=self.nodes[node_name].centroid, 
-                radii=0.03,
-                class_ids=np.array([self.nodes[node_name].id] * self.nodes[node_name].pct.shape[0]))
-            )
+                    positions=sampled_points,
+                    colors=point_colors,
+                    class_ids=np.array([node.id] * sampled_points.shape[0])
+                ))
+
+            if node.visible:
+                base_color = node.color
+                if base_color is not None and len(base_color) == 3:
+                    # Convert RGB 0-1 to RGB 0-255 for rerun
+                    r, g, b = base_color
+                    centroid_color = np.array([
+                        int(r * 255),
+                        int(g * 255),
+                        int(b * 255)
+                    ])
+                else:
+                    # Fallback color
+                    centroid_color = np.array([255, 100, 100])  # Red-orange
+
+                rr.log(f"world/centroids/{node_name}", rr.Points3D(
+                    positions=node.centroid,
+                    colors=np.array([centroid_color]),
+                    class_ids=np.array([node.id])
+                ))
+
+    def log_rerun_teaser(self, show_pct: bool = False, max_points: int = 3000, edge_threshold: float = 0.5,
+                         timestep: int = 0, transition_start: int = 900, transition_duration: int = 200,
+                         final_edge_thickness: float = 0.008):
+        """
+        Log the scene graph to rerun with radius-based animation transitions.
+
+        Args:
+            show_pct: Whether to show point clouds
+            max_points: Maximum number of points to sample per node
+            edge_threshold: Distance threshold for creating edges between nodes
+            timestep: Current timestep (0-1700)
+            transition_start: Timestep when transition begins (default: 900)
+            transition_duration: Duration of transition in timesteps (default: 200)
+            final_edge_thickness: Final thickness of edges after transition (default: 0.008)
+        """
+        # Calculate transition progress (0.0 to 1.0)
+        transition_end = transition_start + transition_duration
+        if timestep <= transition_start:
+            transition_progress = 0.0
+        elif timestep >= transition_end:
+            transition_progress = 1.0
+        else:
+            transition_progress = (timestep - transition_start) / transition_duration
+
+        # Calculate dynamic radii based on transition progress
+        # Points: radius decreases from 0.010 to 0.001 during transition
+        points_radius = 0.010 * (1 - transition_progress * 0.9)  # Reduces to 10% of original size
+
+        # Centroids: radius increases from 0.001 to 0.08 during transition
+        centroids_radius = 0.001 + (transition_progress * 0.079)  # Grows from tiny to full size
+
+        # Edges: thickness increases from 0.001 to final_edge_thickness during transition
+        edges_thickness = 0.001 + (transition_progress * (final_edge_thickness - 0.001))
+
+        # Debug: print radius values for verification
+        if timestep % 100 == 0:  # Print every 100 frames
+            print(f"Frame {timestep}: transition_progress={transition_progress:.3f}")
+            print(f"  Points radius: {points_radius:.6f}, Centroids radius: {centroids_radius:.6f}, Edges thickness: {edges_thickness:.6f}")
+
+            # Count visible vs total nodes for debugging
+            total_nodes = len(self.nodes)
+            visible_nodes = sum(1 for node in self.nodes.values() if node.visible)
+            print(f"  Nodes: {visible_nodes}/{total_nodes} visible")
+
+        # Create edges between nodes that are closer than edge_threshold meters
+        edge_strips = []
+        edge_colors = []
+
+        node_list = list(self.nodes.values())
+        for i in range(len(node_list)):
+            for j in range(i + 1, len(node_list)):
+                node1 = node_list[i]
+                node2 = node_list[j]
+                distance = np.linalg.norm(node1.centroid - node2.centroid)
+                if distance < edge_threshold:
+                    edge_strips.append([node1.centroid, node2.centroid])
+                    edge_colors.append([100, 100, 100, 255])  # Solid gray color for edges
+
+        if edge_strips:
+            rr.log("world/edges", rr.LineStrips3D(
+                strips=np.array(edge_strips),
+                colors=np.array(edge_colors),
+                radii=edges_thickness  # Use dynamic thickness based on transition
+            ))
+
+        for node_name in self.nodes:
+            node = self.nodes[node_name]
+
+            # During transition, render ALL nodes (even invisible ones) to apply shrinking radius
+            # Outside transition, only render visible nodes as usual
+            should_render_points = False
+            if show_pct and node.pct is not None:
+                if transition_progress > 0.0 and transition_progress < 1.0:
+                    # During transition: render ALL nodes with transition radius
+                    should_render_points = True
+                elif node.visible:
+                    # Outside transition: only render visible nodes
+                    should_render_points = True
+
+            if should_render_points:
+                # Resample points only for visible nodes
+                sampled_points = node.pct[np.random.choice(
+                    node.pct.shape[0],
+                    min(max_points, node.pct.shape[0]),
+                    replace=False
+                )]
+
+                # Get base color from node's color (RGB 0-1 from get_color_for_id)
+                base_color = node.color
+                if base_color is not None and len(base_color) == 3:
+                    # Convert RGB 0-1 to RGB 0-255 for rerun
+                    r, g, b = base_color
+                    point_color = np.array([
+                        int(r * 255),
+                        int(g * 255),
+                        int(b * 255)
+                    ])
+                    # Apply color to all points
+                    point_colors = np.tile(point_color, (sampled_points.shape[0], 1))
+                else:
+                    # Fallback to class_ids for coloring
+                    point_colors = None
+
+                rr.log(f"world/points/{node_name}", rr.Points3D(
+                    positions=sampled_points,
+                    radii=points_radius,  # Use dynamic radius based on transition
+                    colors=point_colors,
+                    class_ids=np.array([node.id] * sampled_points.shape[0])
+                ))
+
+            # Only render centroids once transition starts
+            # During transition: render ALL centroids (even invisible ones) with growing radius
+            # After transition: render ALL centroids at full size
+            should_render_centroid = transition_progress > 0.0
+
+            if should_render_centroid:
+                base_color = node.color
+                if base_color is not None and len(base_color) == 3:
+                    # Convert RGB 0-1 to RGB 0-255 for rerun
+                    r, g, b = base_color
+                    centroid_color = np.array([
+                        int(r * 255),
+                        int(g * 255),
+                        int(b * 255)
+                    ])
+                else:
+                    # Fallback color
+                    centroid_color = np.array([255, 100, 100])  # Red-orange
+
+                rr.log(f"world/centroids/{node_name}", rr.Points3D(
+                    positions=node.centroid,
+                    radii=centroids_radius,  # Use dynamic radius based on transition
+                    colors=np.array([centroid_color]),
+                    class_ids=np.array([node.id])
+                ))
 
     def highlight_clip_feature_similarity(self, text: str = "football", max_points: int = 5000):
         from dsg.features.clip_features import CLIPFeatures

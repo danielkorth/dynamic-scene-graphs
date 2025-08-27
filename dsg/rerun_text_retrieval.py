@@ -72,7 +72,7 @@ def main(cfg: DictConfig):
     # log the points from last timestep
 
     for i, (rgb, depth, tvec, rvec, obj_points) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs, obj_points)):
-        if i == len(rgb_images) - 1:
+        if i == len(tvecs) - 1:
             rr.log("world/camera", rr.Transform3D(
                 mat3x3=Rotation.from_rotvec(rvec).as_matrix(),
                 translation=tvec,
@@ -81,7 +81,7 @@ def main(cfg: DictConfig):
             rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000.0, depth_range=[0, 5000]))
             rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks(obj_points)))
             graph.log_rerun(show_pct=True)
-            graph.highlight_clip_feature_similarity_progressive()
+            graph.highlight_clip_feature_similarity_progressive(text=cfg.text)
 
         for obj_id, obj_point in obj_points.items():
             if obj_point['mask'].sum() == 0:
@@ -100,14 +100,6 @@ def main(cfg: DictConfig):
                     graph.nodes[f'obj_{obj_id}'].pct = points_3d
                 graph.nodes[f'obj_{obj_id}'].centroid = centroid
             graph.nodes[f'obj_{obj_id}'].clip_features = obj_point['clip_features']
-
-        # # LOG CAMERA TRAJECTORY
-        # if i > 0:
-        #     line_strips.append(np.array([tvecs[i-1], tvecs[i]]))
-        #     rr.log("world/trajectory", rr.LineStrips3D(
-        #         strips=np.array(line_strips),
-        #         colors=np.array([[255, 0, 0, 255]] * len(line_strips)),
-        #     ))
 
         rr.set_time(timeline="world", sequence=i)
 

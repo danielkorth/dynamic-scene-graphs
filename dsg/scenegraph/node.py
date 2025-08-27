@@ -178,6 +178,7 @@ class Node:
         self.use_tsdf = use_tsdf
         self.n_acc_pcs = 0
         self.max_vol = 0
+        self.visible = True  # Track visibility state
     
     @property
     def centroid(self):
@@ -689,6 +690,14 @@ class Node:
             print(f"Object {self.name} is moving with {outside_percentage*100:.1f}% outside points ({outside_mask_count}/{total_points})")
         return moving
     
+
+    @property
+    def visible(self):
+        return self._visible
+
+    @visible.setter
+    def visible(self, value: bool):
+        self._visible = value
 
 class Edge:
     def __init__(self, source: Node, target: Node):
