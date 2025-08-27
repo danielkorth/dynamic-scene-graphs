@@ -14,19 +14,18 @@ https://github.com/user-attachments/assets/0115fc38-ac2c-45b3-94f3-728af601169e
 
 Work done during 2 month ETH SSRF / RSL internship. Advised by Zuria Bauer and Daniel Barath.
 
-tl;dr: ZED i2 RGB-D recording -> poses -> SAM2 multitrack segmentation -> scene graph + object reconstruction + salad/clip features.
+tl;dr: ZED RGB-D recording -> SAM2 Video Tracking-> Lift Mask + Features to 3D -> Scene Graph.
 
 ## Setup
-
 
 ```bash
 conda create -n dsg python=3.10
 conda activate dsg
-pip install uv 
-uv pip install -e .
+pip install -e .
+
 # installing sam2
 cd sam2
-uv pip install -e .
+pip install -e .
 ```
 
 ## Data Structure
