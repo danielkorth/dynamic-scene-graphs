@@ -24,6 +24,9 @@ pip install -e .
 # installing sam2
 cd sam2
 pip install -e .
+
+# download sam2 checkpoints
+sh scripts/download_sam.sh
 ```
 
 ## Configuration
