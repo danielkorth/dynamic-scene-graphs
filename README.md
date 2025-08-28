@@ -45,9 +45,6 @@ data/
       poses.txt                  # Camera poses
       intrinsics.txt             # Camera intrinsics
       images_undistorted_crop/   # Undistorted RGB images (after step 3)
-      masks_{stride}_{max_frames}/     # SAM2 segmentation masks
-      mask_images_{stride}_{max_frames}/ # Visualization of masks
-      obj_points_history/        # 3D object point clouds
 ```
 
 ## Workflow
