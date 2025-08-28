@@ -170,7 +170,7 @@ def update_running_average(obj_data: dict, new_salad_features: np.ndarray, new_c
         obj_data['clip_running_avg'] = (obj_data['clip_running_avg'] * (obj_data['feature_count'] - 1) + new_clip_features) / obj_data['feature_count']
 
 
-@hydra.main(config_path="../configs", config_name="sam2_reinit.yaml")
+@hydra.main(config_path="../configs", config_name="video_tracking.yaml")
 def main(cfg):
     # load and subsample images
     import os

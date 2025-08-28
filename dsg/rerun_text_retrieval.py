@@ -15,7 +15,7 @@ def aggregate_masks(obj_points):
         mask[obj_point['mask']] = id
     return mask
 
-@hydra.main(config_path="../configs", config_name="sam2_reinit")
+@hydra.main(config_path="../configs", config_name="video_tracking")
 def main(cfg: DictConfig):
     # set up rerun env
     if cfg.headless:
