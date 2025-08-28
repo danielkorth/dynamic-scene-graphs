@@ -494,8 +494,10 @@ class Node:
         # Check if we should replace the pointcloud instead of accumulating
         aggregation = self._should_replace_pointcloud(points_3d, accumulate_points, 
                                                     camera_intrinsics, camera_pose, current_mask, depth_image)
-        if obj_id is not None and obj_id in [3, 24, 16]:
-            aggregation = "replace"
+        # if obj_id is not None and obj_id in [17, 14, 8, 7]:
+        #     aggregation = "replace"
+
+        # aggregation = "accumulate"
 
         # Visualization of the input pointcloud and its bounding box
         if visualize:

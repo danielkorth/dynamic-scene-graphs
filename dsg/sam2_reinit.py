@@ -132,7 +132,7 @@ def main(cfg):
         save_sam_cv2(video_segments, subsets[i], output_masks_dir, output_vis_dir)
     
         # update the points and labels for next episode
-        full_mask = np.zeros_like(video_segments[len(video_segments) - 1][0])
+        full_mask = np.zeros_like(list(video_segments[len(video_segments) - 1].values())[0])
         for obj_id, mask in video_segments[len(video_segments) - 1].items():
             full_mask += mask
 
@@ -168,9 +168,9 @@ def main(cfg):
                 salad_features = salad_extractor.extract_features(crop_path).cpu().numpy()
 
                 ### check if the new object is new
-                # new_obj_id = reident_new_masks(obj_points, num_obj_last_it, salad_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
-                new_obj_id = -1 # for testing
-                if new_obj_id == -1:
+                new_obj_id = reident_new_masks(obj_points, num_obj_last_it, salad_features, threshold=0.4, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
+                # new_obj_id = -1 # for testing
+                if new_obj_id == -1 or obj_points[new_obj_id]['mask'].sum() > 0:
                     new_obj_id = next_obj_id
                     next_obj_id += 1
 

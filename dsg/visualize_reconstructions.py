@@ -86,8 +86,10 @@ def visualize_reconstructions(reconstructions_folder: str, max_points_per_cloud:
     geometries = []
     
     # selected_files = [ply_files[9]] # 9-umbrella
-    selected_files = [ply_files[0]] # 0-lamp
+    # selected_files = [ply_files[0]] # 0-lamp
     # selected_files = [ply_files[19]]# 19-notebook
+
+    selected_files = [ply_files[28], ply_files[13]]
     for i, ply_file in enumerate(selected_files):
         print(f"Loading {ply_file.name}...")
         

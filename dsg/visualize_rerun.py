@@ -95,6 +95,7 @@ def main(cfg: DictConfig):
         resolution=[rgb_images[0].shape[1], rgb_images[0].shape[0]],
         principal_point=[intrinsics["cx"], intrinsics["cy"]],
         focal_length=[intrinsics["fx"], intrinsics["fy"]],
+        image_plane_distance=0.1,
     ), static=True)
 
     # all_3d_points = []
