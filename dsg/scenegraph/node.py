@@ -172,11 +172,13 @@ class Node:
         self.radius = radius
         self.label = label
         self.pct = pct
+        self.clip_features = None
         self.rgb = rgb_points
         self.tsdf = tsdf
         self.use_tsdf = use_tsdf
         self.n_acc_pcs = 0
         self.max_vol = 0
+        self.visible = True  # Track visibility state
     
     @property
     def centroid(self):
@@ -217,6 +219,14 @@ class Node:
         else:
             self.pct = np.concatenate([self.pct, pct], axis=0)
             self.rgb = np.concatenate([self.rgb, rgb_points], axis=0)
+        
+    @property
+    def clip_features(self):
+        return self._clip_features
+
+    @clip_features.setter
+    def clip_features(self, value: np.ndarray):
+        self._clip_features = value
     
     def integrate_frame_to_tsdf(self, 
                                depth_image: np.ndarray,
@@ -684,6 +694,14 @@ class Node:
         #     print(f"Object {self.name} is moving with {outside_percentage*100:.1f}% outside points ({outside_mask_count}/{total_points})")
         return moving
     
+
+    @property
+    def visible(self):
+        return self._visible
+
+    @visible.setter
+    def visible(self, value: bool):
+        self._visible = value
 
 class Edge:
     def __init__(self, source: Node, target: Node):

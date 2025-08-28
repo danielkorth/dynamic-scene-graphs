@@ -1,6 +1,6 @@
 #!/bin/bash
 
-FILE_NAMES=("cooking")
+FILE_NAMES=("zed_mini")
 for FILE_NAME in ${FILE_NAMES[@]}; do
     INPUT_SVO_FILE="data/svo/$FILE_NAME.svo2"
     OUTPUT_PATH_DIR="data/zed/$FILE_NAME"

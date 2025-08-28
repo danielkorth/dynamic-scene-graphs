@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import rerun as rr
 from dsg.utils.data_loading import load_poses, get_camera_matrix
@@ -10,9 +11,16 @@ import hydra
 from omegaconf import DictConfig
 from dsg.scenegraph.graph import SceneGraph, process_frame_with_representation
 import open3d as o3d
-import os
 
-def aggregate_masks(obj_points):
+def aggregate_masks(obj_points, default_shape=None):
+    if not obj_points:
+        # Return empty mask with default shape or use first available mask shape
+        if default_shape is not None:
+            return -1 * np.ones(default_shape)
+        else:
+            # If no default shape and no objects, return a small default mask
+            return -1 * np.ones((480, 640))  # Common camera resolution
+
     mask = -1 * np.ones(obj_points[0]['mask'].shape)
     for id, obj_point in obj_points.items():
         mask[obj_point['mask']] = id
@@ -48,7 +56,7 @@ def main(cfg: DictConfig):
     # K = get_camera_matrix(intrinsics)
     # dist = get_distortion_coeffs(intrinsics)
 
-    from dsg.utils.data_loading import load_everything
+    from dsg.utils.data_loading import load_everything, load_rgb_image, load_depth_image, load_obj_points
     # Determine depth directory based on depth_source configuration
     depth_dir = None
     if hasattr(cfg, 'depth_source') and cfg.depth_source == 'moge':
@@ -66,40 +74,29 @@ def main(cfg: DictConfig):
     depth_images = data["depth"]
     obj_points = data["obj_points"]
 
-    # zed poses
+    # Only load poses efficiently (they're already memory-efficient)
     tvecs, rvecs = load_poses(Path(cfg.source_folder) / "poses.txt", max_frames=cfg.max_frames, subsample=cfg.subsample)
 
-    print(f"Loaded {len(rgb_images)} RGB images and {len(depth_images)} depth images")
+    # Get list of frames to process based on the poses
+    num_frames = len(tvecs)
+
+    print(f"Will process {num_frames} frames with lazy loading")
+
     print(f"Loaded {len(tvecs)} poses (translations: {len(tvecs)}, rotations: {len(rvecs)})")
-
-    # rr.log("/", rr.AnnotationContext([  
-    #     rr.AnnotationInfo(id=1, label="red", color=rr.Rgba32([255, 0, 0, 255])),  
-    #     rr.AnnotationInfo(id=2, label="green", color=rr.Rgba32([0, 255, 0, 255]))  
-    # ]), static=True)
-
-#     rr.log(
-#     "masks",  # Applies to all entities below "masks".
-#     rr.AnnotationContext(
-#         [
-#             rr.AnnotationInfo(id=0, label="Background"),
-#             rr.AnnotationInfo(id=1, label="Person", color=(255, 0, 0, 0)),
-#         ],
-#     ),
-#     static=True,
-# )
-    # rr.log("/", rr.AnnotationContext([(1, "red", (255, 0, 0)), (2, "green", (0, 255, 0))]), static=True)
 
     rr.log("world/camera", rr.ViewCoordinates.RDF)
 
+    # Load first frame to get image dimensions for camera setup
+    first_frame_idx = cfg.subsample if cfg.subsample > 0 else 0
+    first_rgb = load_rgb_image(cfg.images_folder, first_frame_idx)
+
     rr.log("world/camera/image", rr.Pinhole(
-        resolution=[rgb_images[0].shape[1], rgb_images[0].shape[0]],
+        resolution=[first_rgb.shape[1], first_rgb.shape[0]],
         principal_point=[intrinsics["cx"], intrinsics["cy"]],
         focal_length=[intrinsics["fx"], intrinsics["fy"]],
-        image_plane_distance=0.1,
+        image_plane_distance=0.25,
     ), static=True)
 
-    # all_3d_points = []
-    # centers = []
     graph = SceneGraph()
 
     line_strips = []
@@ -108,20 +105,43 @@ def main(cfg: DictConfig):
     use_tsdf = getattr(cfg, 'use_tsdf', False)
     print(f"Using TSDF representation: {use_tsdf}")
 
-    for i, (rgb, depth, tvec, rvec, obj_points) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs, obj_points)):
+    # Load all data at once (original approach)
+    rgb_images = []
+    depth_images = []
+    obj_points_list = []
+
+    for i in range(num_frames):
+        frame_idx = i * cfg.subsample if cfg.subsample > 0 else i
+
+        rgb = load_rgb_image(cfg.images_folder, frame_idx)
+        depth = load_depth_image(cfg.images_folder, frame_idx)
+
+        if cfg.obj_points_dir is not None:
+            obj_points_file = os.path.join(cfg.obj_points_dir, f"obj_points_{frame_idx}.npy")
+            if os.path.exists(obj_points_file):
+                obj_points = load_obj_points(obj_points_file)
+            else:
+                obj_points = {}
+        else:
+            obj_points = {}
+
+        rgb_images.append(rgb)
+        depth_images.append(depth)
+        obj_points_list.append(obj_points)
+
+    # Process all frames at once
+    for i, (rgb, depth, tvec, rvec, obj_points) in enumerate(zip(rgb_images, depth_images, tvecs, rvecs, obj_points_list)):
         rr.log("world/camera", rr.Transform3D(
             mat3x3=Rotation.from_rotvec(rvec).as_matrix(),
             translation=tvec,
         ))
         rr.log("world/camera/image/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
         rr.log("world/camera/image/depth", rr.DepthImage(depth, meter=1000.0, depth_range=[0, 5000]))
-        rr.log("world/camera/image/mask", rr.SegmentationImage(aggregate_masks(obj_points)))
 
         # Process frame with chosen representation
         process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf)
 
-        print("Graph size: ", len(graph))
-
+        # Log graph using original log_rerun function
         graph.log_rerun(show_pct=True)
 
         # LOG CAMERA TRAJECTORY
@@ -141,17 +161,17 @@ def main(cfg: DictConfig):
 def save_textured_pointclouds(graph, source_folder, depth_source):
     """
     Save textured point clouds for all nodes in the scene graph as PLY files.
-    
+
     Args:
         graph: SceneGraph object containing nodes with point cloud data
         source_folder: Base folder path where reconstructions will be saved
     """
     print("Saving textured pointclouds for all nodes...")
-    
+
     # Create output directory
     output_dir = Path(source_folder) / f"final_reconstructions_{depth_source}"
     output_dir.mkdir(exist_ok=True)
-    
+
     # Save pointcloud for each node
     for node_name, node in graph.nodes.items():
         if node.pct is not None and node.rgb is not None and len(node.pct) > 0:
@@ -159,14 +179,14 @@ def save_textured_pointclouds(graph, source_folder, depth_source):
             pcd = o3d.geometry.PointCloud()
             pcd.points = o3d.utility.Vector3dVector(node.pct)
             pcd.colors = o3d.utility.Vector3dVector(node.rgb)  # Normalize RGB values to [0,1]
-            
+
             # Save as PLY file
             output_file = output_dir / f"{node_name}_textured.ply"
             o3d.io.write_point_cloud(str(output_file), pcd)
             print(f"Saved {node_name} pointcloud with {len(node.pct)} points to {output_file}")
         else:
             print(f"Skipping {node_name} - no valid pointcloud data")
-    
+
     print(f"All pointclouds saved to {output_dir}")
 
 
