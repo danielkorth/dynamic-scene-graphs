@@ -3,14 +3,14 @@ from pathlib import Path
 import rerun as rr
 from dsg.utils.data_loading import load_poses, get_camera_matrix
 from dsg.utils.rerun import setup_blueprint
-from dsg.utils.tools import get_color_for_id
 import numpy as np
 from scipy.spatial.transform import Rotation
-from dsg.utils.cv2_utils import unproject_image
 import hydra
 from omegaconf import DictConfig
 from dsg.scenegraph.graph import SceneGraph, process_frame_with_representation
 import open3d as o3d
+from dsg.utils.data_loading import load_everything, load_rgb_image, load_depth_image, load_obj_points
+o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
 
 def aggregate_masks(obj_points, default_shape=None):
     if not obj_points:
@@ -56,19 +56,18 @@ def main(cfg: DictConfig):
     # K = get_camera_matrix(intrinsics)
     # dist = get_distortion_coeffs(intrinsics)
 
-    from dsg.utils.data_loading import load_everything, load_rgb_image, load_depth_image, load_obj_points
     # Determine depth directory based on depth_source configuration
-    depth_dir = None
-    if hasattr(cfg, 'depth_source') and cfg.depth_source == 'moge':
-        depth_dir = cfg.moge_depth_dir
-    elif hasattr(cfg, 'depth_source') and cfg.depth_source == 'moge_aligned':
-        depth_dir = cfg.moge_aligned_depth_dir
-    elif hasattr(cfg, 'depth_source') and cfg.depth_source == 'sensor':
-        depth_dir = None  # Use default path in images directory
-    else:
-        depth_dir = None  # Default behavior
+    # depth_dir = None
+    # if hasattr(cfg, 'depth_source') and cfg.depth_source == 'moge':
+    #     depth_dir = cfg.moge_depth_dir
+    # elif hasattr(cfg, 'depth_source') and cfg.depth_source == 'moge_aligned':
+    #     depth_dir = cfg.moge_aligned_depth_dir
+    # elif hasattr(cfg, 'depth_source') and cfg.depth_source == 'sensor':
+    #     depth_dir = None  # Use default path in images directory
+    # else:
+    #     depth_dir = None  # Default behavior
     
-    data = load_everything(cfg.images_folder, cfg.obj_points_dir, max_frames=cfg.max_frames, subsample=cfg.subsample, depth_dir=depth_dir)
+    data = load_everything(cfg.images_folder, cfg.obj_points_dir, max_frames=cfg.max_frames, subsample=cfg.subsample)
 
     rgb_images = data["rgb"]
     depth_images = data["depth"]

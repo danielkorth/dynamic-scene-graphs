@@ -350,15 +350,12 @@ class Node:
         
         # For planes, use area instead of volume
         if is_plane and bbox_area > AREA_THRESHOLD:
-            # print(f"Plane detected: volume={bbox_volume:.6f}, area={bbox_area:.6f}, threshold={AREA_THRESHOLD}")
             occ_percentage = calculate_occlusion_percentage(self.pct, current_mask, depth_image, camera_intrinsics, camera_pose, depth_tolerance=0.01, visualize=False)
-            # print(f"Occ percentage: {occ_percentage}")
             if occ_percentage > OCC_THRESHOLD:
                 return "ignore"
             else:
                 return "accumulate" 
         elif is_plane and bbox_area < SIZE_WRT_PREV*self._calculate_bbox_area(self.pct)[0]:
-            # print(f"Plane detected but area small wrt previous -> ignoring")
             return "ignore"
         
         # If volume is too large, replace instead of accumulate
@@ -690,8 +687,6 @@ class Node:
                                           outside_percentage*100, outside_points_threshold*100)
                 
         # Object is considered moving if more than threshold percentage of points are outside the mask
-        # if moving:
-        #     print(f"Object {self.name} is moving with {outside_percentage*100:.1f}% outside points ({outside_mask_count}/{total_points})")
         return moving
     
 

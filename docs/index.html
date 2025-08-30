@@ -62,7 +62,7 @@
                   </a>
               </span>
               <!-- Slides Link. -->
-              <span class="link-block">
+              <!-- <span class="link-block">
                 <a href="static/pdfs/report.pdf"
                    class="external-link button is-normal is-rounded is-dark">
                   <span class="icon">
@@ -70,7 +70,7 @@
                   </span>
                   <span>Slides</span>
                 </a>
-              </span>
+              </span> -->
               <!-- Video Link. -->
               <span class="link-block">
                 <a href="https://youtu.be/tMiMO2Wnj8Q"
@@ -128,7 +128,7 @@
     <div class="columns is-centered">
       <div class="column">
         <h2 class="title">Method</h2>
-        <img src="./static/images/method.png" alt="Method" height="100%">
+        <img src="./static/images/method.png" alt="Method" height="80%" width="80%" >
         <div class="content has-text-justified">
           <p>
             <!-- We record an RGB-D sequence using a Zed Mini and extract camera poses. The initial frame is segmented with SAM to obtain object masks, which are tracked across frames using SAM’s latent mask encoding. Every n frames, tracking is restarted by transferring the latest masks to a new SAM tracking state and using SAM’s automatic segmentation to detect new regions. For each new mask, we extract SALAD features and compare them to previous crops using cosine similarity for object re-identification. Masks, camera poses, and depth allow us to unproject masks into 3D, forming nodes in a scene graph. Each node stores a centroid, SALAD/CLIP features, crops, and a node-centric point cloud. CLIP features are used for text-based queries. For object reconstruction, we align unprojected partial masks across frames using ICP, enabling continuous object updates. Our method supports dynamic scenes and handles occlusions through specialized re-identification. -->

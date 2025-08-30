@@ -2,8 +2,6 @@ from dsg.utils.sam2_utils import (create_overlapping_subsets, mask_first_frame,
                                 save_sam_cv2, make_video_from_visualizations, save_obj_points, solve_overlap, reident_new_masks)
 from sam2.build_sam import build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
-from dsg.features.dinov2 import DINOv2
-from dsg.features.dinov3 import DINOv3
 from dsg.features.salad import SALAD
 from dsg.features.clip_features import CLIPFeatures
 import hydra
@@ -175,9 +173,7 @@ def main(cfg):
     # load and subsample images
     import os
     original_cwd = hydra.utils.get_original_cwd()
-    print(original_cwd)
     os.chdir(original_cwd)
-    print(os.getcwd())
     subsets = create_overlapping_subsets(cfg.images_folder, cfg.output_folder, cfg.chunk_size, cfg.overlap, cfg.subsample)
 
     obj_points_dir = os.path.join(cfg.source_folder, "obj_points_history")

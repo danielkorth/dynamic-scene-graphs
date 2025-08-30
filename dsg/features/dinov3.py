@@ -61,13 +61,3 @@ class DINOv3:
         )
         cls_embedding = last_hidden_states[:, 0, :]
         return cls_embedding
-
-
-# Example usage
-if __name__ == "__main__":
-    dinov3 = DINOv3()
-    image_path = "/local/home/dkorth/Projects/dynamic-scene-graphs/outputs/2025-08-02/09-13-00/crop/cropped_image_0.jpg"
-    embedding = dinov3.extract_features(image_path)
-    print("Embedding shape:", embedding.shape)
-
-

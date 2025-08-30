@@ -74,13 +74,3 @@ class CLIPFeatures:
         if not hasattr(outputs, "text_embeds") or outputs.text_embeds is None:
             raise RuntimeError("CLIPTextModelWithProjection did not return text_embeds")
         return outputs.text_embeds
-
-
-# Example usage
-if __name__ == "__main__":
-    extractor = CLIPFeatures()
-    image_path = "/local/home/dkorth/Projects/dynamic-scene-graphs/outputs/2025-08-02/09-13-00/crop/cropped_image_0.jpg"
-    img_emb = extractor.extract_vision_features(image_path)
-    txt_emb = extractor.extract_text_features(["a photo of a cat", "a photo of a dog"])
-    print("CLIP projected image embedding:", img_emb.shape)
-    print("CLIP projected text embeddings:", txt_emb.shape)

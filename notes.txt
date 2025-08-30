@@ -1,2 +1,0 @@
-# command works
-python dsg/video_tracking.py recording=game_dyn4 source_folder=/local/home/dkorth/Projects/dsg2/data images_folder=/local/home/dkorth/Projects/dsg2/data/game_dyn4/images_undistorted_crop

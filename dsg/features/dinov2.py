@@ -49,14 +49,3 @@ class DINOv2:
         cls_embedding = last_hidden_states[:, 0, :]  # [CLS] token: global image embedding
         
         return cls_embedding
-
-# Example usage
-if __name__ == "__main__":
-    # Initialize the model
-    dinov2 = DINOv2()
-    
-    # Extract features from an image
-    image_path = "/local/home/dkorth/Projects/dynamic-scene-graphs/outputs/2025-08-02/09-13-00/crop/cropped_image_0.jpg"
-    cls_embedding = dinov2.extract_features(image_path)
-    
-    print("CLS embedding shape:", cls_embedding.shape)

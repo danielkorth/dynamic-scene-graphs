@@ -1,7 +1,7 @@
 <div align="center">
 
 # Dynamic 3D Scene Graphs from RGB-D
-[Daniel Korth](https://danielkorth.io/)<sup>1,2,*</sup>, [Xavier Anadon](https://x.com/XaviXva)<sup>1,3,*</sup>, [Marc Pollefeys](https://people.inf.ethz.ch/marc.pollefeys/)<sup>1,4</sup>, [Zuria Bauer](https://zuriabauer.com)<sup>1</sup>, [Daniel Barath](https://cvg.ethz.ch/team/Dr-Daniel-Bela-Barath)<sup>1,5</sup> <br>
+[Daniel Korth](https://danielkorth.io/)<sup>1,2,\*</sup>, [Xavier Anadon](https://x.com/XaviXva)<sup>1,3,\*</sup>, [Marc Pollefeys](https://people.inf.ethz.ch/marc.pollefeys/)<sup>1,4</sup>, [Zuria Bauer](https://zuriabauer.com)<sup>1</sup>, [Daniel Barath](https://cvg.ethz.ch/team/Dr-Daniel-Bela-Barath)<sup>1,5</sup> <br>
 <sup>1</sup>ETH Zurich, <sup>2</sup>Technical University of Munich, <sup>3</sup>University of Zaragoza, <sup>4</sup>Microsoft, <sup>5</sup>HUN-REN SZTAKI <br>
 <sup>*</sup>Equal contribution
 
@@ -88,13 +88,16 @@ If you already have RGB-D images and camera poses:
 2. **Visualize and build scene graph:**
    ```bash
    # Basic visualization
-   python dsg/visualize_rerun.py recording=<recording_name>
+   python dsg/viz_rerun.py recording=<recording_name>
 
    # Advanced visualization with graph updates
-   python dsg/visualize_rerun_teaser.py recording=<recording_name>
+   python dsg/viz_rerun_teaser.py recording=<recording_name>
 
    # Text-based feature retrieval
-   python dsg/rerun_text_retrieval.py recording=<recording_name>
+   python dsg/viz_clip_similarity.py recording=<recording_name>
+
+   # Object reconstruction
+   python dsg/viz_obj_reconstruction.py recording=<recording_name>
    ```
 
 ## Run (starting from ZED recording)
@@ -107,3 +110,17 @@ If you have a raw ZED recording:
    bash scripts/extract_zed.sh
    ```
 3. **Follow steps above.**
+
+## Acknowledgments
+
+Our work builds heavily on foundations models such as [SAM](https://sam2.metademolab.com/) and [CLIP](https://openai.com/blog/clip/) and [SALAD](https://github.com/serizba/salad). We thank the authors for their work and open-source code.
+
+## Citing
+
+```bibtex
+@article{korth2025dynamic,
+  author    = {Korth, Daniel and Anadon, Xavier and Pollefeys, Marc and Bauer, Zuria and Barath, Daniel},
+  title     = {Dynamic 3D Scene Graphs from RGB-D},
+  year      = {2025},
+}
+```
