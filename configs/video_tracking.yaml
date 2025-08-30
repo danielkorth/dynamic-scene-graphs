@@ -29,6 +29,13 @@ output_folder: ${paths.output_dir}                               # General outpu
 obj_points_dir: ${source_folder}/obj_points_history             # Object tracking history
 
 # =============================================================================
+# DEPTH SOURCE CONFIGURATION (Used by: video_tracking.py only)
+# =============================================================================
+depth_source: sensor  # Options: "sensor" (default ZED depth), "moge" (MoGe-2 predicted depth), or "moge_aligned" (MoGe-2 aligned with sensor)
+moge_depth_dir: ${paths.data_dir}zed/${recording}/moge_depths  # Path to MoGe-2 depth maps
+moge_aligned_depth_dir: ${paths.data_dir}zed/${recording}/moge_aligned_depths  # Path to aligned MoGe-2 depth maps
+
+# =============================================================================
 # VIDEO PROCESSING PARAMETERS (Used by: video_tracking.py only)
 # =============================================================================
 # Frame subsampling and chunking
