@@ -7,7 +7,7 @@
 
 [Project Page](https://danielkorth.github.io/dynamic-scene-graphs/) | [Video](https://youtu.be/tMiMO2Wnj8Q)
 
-https://github.com/user-attachments/assets/0115fc38-ac2c-45b3-94f3-728af601169e
+https://github.com/user-attachments/assets/88b1082f-08dd-4f0e-bcb5-6892fbf17200
 
 </div>
 
