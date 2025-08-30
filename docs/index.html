@@ -28,29 +28,6 @@
 </head>
 <body>
 
-<!-- <nav class="navbar" role="navigation" aria-label="main navigation">
-  <div class="navbar-brand">
-    <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
-      <span aria-hidden="true"></span>
-      <span aria-hidden="true"></span>
-      <span aria-hidden="true"></span>
-    </a>
-  </div>
-  <div class="navbar-menu">
-    <div class="navbar-start" style="flex-grow: 1; justify-content: center;">
-      <a class="navbar-item" href="https://danielkorth.io">
-      <span class="icon">
-          <i class="fas fa-home"></i>
-      </span>
-      </a>
-
-      </div>
-    </div>
-
-  </div>
-</nav> -->
-
-
 <section class="hero">
   <div class="hero-body">
     <div class="container is-max-desktop">
@@ -122,7 +99,7 @@
       </br>
       </br>
       <h1 class="subtitle has-text-centered">
-        <b>tl;dr</b> ZED RGB-D recording -> SAM2 Video Tracking-> Lift Mask + Features to 3D -> Scene Graph.
+        <b>tl;dr</b> RGB-D recording + camera poses -> SAM2 Video Tracking -> Lift Mask + Features to 3D -> Scene Graph.
       </h1>
     </div>
   </div>
@@ -136,24 +113,11 @@
         <h2 class="title is-3">Abstract</h2>
         <div class="content has-text-justified">
           <p>
-            To interact in 3D environments, machines require a flexible and leightweight representation of the scene. 3D scene graphs store objects as nodes and relationships as edges. These can be populated with 3D point clouds, RGB images, and other modalities. Here we present a method to build a dynamic scene graph from RGB-D input by lifting SAM video tracking masks to 3D. We use the scene graph to perform object reconstruction and semantic search.
+            To interact in 3D environments, robots require a flexible and lightweight representation of the scene. 3D Scene Graphs store object information (location, features, reconstruction, etc.) in nodes and relationships as edges (distance, semantic, etc.). Here we present a method to build a scene graph from RGB-D input by lifting SAM video tracking masks to 3D. We use the Scene Graph to perform object reconstruction and semantic search, and focus on dynamic scenes with the ability to handle occlusions.
           </p>
         </div>
       </div>
     </div>
-    <!--/ Abstract. -->
-
-    <!-- Paper video. -->
-    <!-- <div class="columns is-centered has-text-centered">
-      <div class="column is-four-fifths">
-        <h2 class="title is-3">Video</h2>
-        <div class="publication-video">
-          <iframe src="https://www.youtube.com/embed/MrKrnHhk8IA?rel=0&amp;showinfo=0"
-                  frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-        </div>
-      </div>
-    </div> -->
-    <!--/ Paper video. -->
   </div>
 </section>
 
@@ -168,9 +132,9 @@
         <div class="content has-text-justified">
           <p>
             <!-- We record an RGB-D sequence using a Zed Mini and extract camera poses. The initial frame is segmented with SAM to obtain object masks, which are tracked across frames using SAM’s latent mask encoding. Every n frames, tracking is restarted by transferring the latest masks to a new SAM tracking state and using SAM’s automatic segmentation to detect new regions. For each new mask, we extract SALAD features and compare them to previous crops using cosine similarity for object re-identification. Masks, camera poses, and depth allow us to unproject masks into 3D, forming nodes in a scene graph. Each node stores a centroid, SALAD/CLIP features, crops, and a node-centric point cloud. CLIP features are used for text-based queries. For object reconstruction, we align unprojected partial masks across frames using ICP, enabling continuous object updates. Our method supports dynamic scenes and handles occlusions through specialized re-identification. -->
-            We begin by recording an RGB-D video sequence using a Zed Mini camera, capturing both color and depth information alongside camera poses. The initial frame is segmented with SAM (Segment Anything Model), which encodes object masks into a latent space for efficient video tracking. These masks are tracked across subsequent frames using SAM’s latent mask encoding. 
-            To maintain robust tracking, we periodically restart the tracking process every n frames by transferring the latest masks to a new SAM tracking state. SAM’s automatic segmentation is then used to sample points and identify new regions in the frame that have not yet been segmented. For each newly detected mask, we extract SALAD feature descriptors and compare them to previously stored crops using cosine similarity. If the similarity score is high and the object is currently not visible, we re-identify it as an object previously seen.
-            Masks, camera poses, and depth data are used to unproject the 2D masks into 3D space, constructing nodes in a dynamic scene graph. Each node contains a centroid, extracted SALAD and CLIP features, the corresponding object crops, and a node-centric point cloud derived from depth data. CLIP features are used to enable text-based queries after the scene graph is constructed, allowing semantic search over objects.
+            We begin by recording an RGB-D video sequence using a Zed Mini camera, capturing both color and depth information and extract camera poses. The initial frame is segmented with SAM2 (Segment Anything Model), which encodes object masks into a latent space for efficient video tracking. These masks are tracked across subsequent frames using SAM’s latent mask encoding. 
+            To maintain robust tracking and integrate unmasked parts of the video into the graph, we restart the tracking process every n frames by transferring the latest masks to a new SAM tracking state. SAM’s automatic segmentation is then used to sample points and identify new regions in the frame that have not yet been segmented. For each newly detected mask, we extract SALAD feature descriptors and compare them to previously stored crops using cosine similarity. If the similarity score is high and the object is currently not visible, we re-identify it as an object previously seen.
+            Masks, camera poses, and depth data are used to unproject the 2D masks into 3D space, constructing nodes in a scene graph. Each node contains a centroid, extracted SALAD and CLIP features, the corresponding object crops, and a node-centric point cloud . CLIP features are used to enable text-based queries after the scene graph is constructed, allowing semantic search over objects.
             For object reconstruction, we apply Iterative Closest Point (ICP) alignment to unprojected partial masks from different frames, gradually refining and updating each object’s 3D representation. This approach supports dynamic scenes and resolves occlusions using the specialized re-identification module based on multi-resolution feature matching.
           </p>
         </div>
