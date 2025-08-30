@@ -278,15 +278,18 @@ def main(cfg):
         for obj_id, obj_data in obj_points.items():
             # if we have mask, transfer it. otherwise, use points.
             if obj_data['mask'] is not None:
+                if obj_data['mask'].sum() == 0:
+                    print(f"Empty mask for obj {obj_id} in subset {i}")
+                    continue
                 predictor.add_new_mask(
                     inference_state=inference_state,
                     frame_idx=0,
                     obj_id=obj_id,
                     mask=obj_data['mask']
                 )
-                continue
             # skip empty
             elif len(obj_data['points']) > 0:
+                raise NotImplementedError("Not implemented")
                 _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
                     inference_state=inference_state,
                     frame_idx=0,
@@ -368,7 +371,7 @@ def main(cfg):
         save_sam_cv2(video_segments, subsets[i], output_masks_dir, output_vis_dir)
     
         # update the points and labels for next episode
-        full_mask = np.zeros_like(video_segments[len(video_segments) - 1][0])
+        full_mask = np.zeros_like(list(video_segments[len(video_segments) - 1].values())[0])
         for obj_id, mask in video_segments[len(video_segments) - 1].items():
             full_mask += mask
 
@@ -425,7 +428,8 @@ def main(cfg):
                     comparison_features = salad_features
 
                 new_obj_id = reident_new_masks(obj_points, num_obj_last_it, comparison_features, threshold=cfg.reid_threshold, viz=True, new_crop=new_crop, output_dir=cfg.output_folder + "/reidentification", idx1=i, idx2=j)
-                if new_obj_id == -1:
+                # new_obj_id = -1 # for testing
+                if new_obj_id == -1 or obj_points[new_obj_id]['mask'].sum() > 0:
                     new_obj_id = next_obj_id
                     next_obj_id += 1
                 

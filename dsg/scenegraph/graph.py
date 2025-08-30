@@ -3,11 +3,12 @@ import rerun as rr
 import numpy as np
 import matplotlib.pyplot as plt
 import open3d as o3d
-from utils.tools import get_color_for_id
+from dsg.utils.tools import get_color_for_id
 from scipy.spatial.transform import Rotation
-from utils.cv2_utils import unproject_image
+from dsg.utils.cv2_utils import unproject_image
+import cv2
 
-def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf=False):
+def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, graph, cfg, use_tsdf=False, debug_mask=False):
     """
     Process a frame and update the scene graph with either TSDF or point cloud representation.
     
@@ -31,7 +32,8 @@ def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, gra
     for obj_id, obj_point in obj_points.items():
         if obj_point['mask'].sum() <= 0:
             continue
-        points_3d, pixel_coords = unproject_image(depth, K, -rvec, tvec, mask=obj_point['mask'], dist=None, mask_erode_kernel=5)
+        erosion_kernel = 13 if cfg.depth_source is not None and "moge" in cfg.depth_source else 5
+        points_3d, pixel_coords = unproject_image(depth, K, -rvec, tvec, mask=obj_point['mask'], dist=None, mask_erode_kernel=erosion_kernel)
         # Convert pixel coordinates to integers for array indexing
         pixel_coords_int = pixel_coords.astype(np.int32)
         rgb_points = rgb[pixel_coords_int[:, 1], pixel_coords_int[:, 0]] / 255.0
@@ -59,7 +61,7 @@ def process_frame_with_representation(rgb, depth, tvec, rvec, obj_points, K, gra
                 else:
                     node.integrate_pointcloud(points_3d, rgb_points, cfg.accumulate_points, 
                                             camera_intrinsics=K, camera_pose=camera_pose, 
-                                            current_mask=obj_point['mask'], depth_image=depth)
+                                            current_mask=obj_point['mask'], depth_image=depth, obj_id=obj_id)
             
 
 class SceneGraph:
@@ -90,7 +92,7 @@ class SceneGraph:
                 distance = np.linalg.norm(node1.centroid - node2.centroid)
                 if distance < edge_threshold:
                     edge_strips.append([node1.centroid, node2.centroid])
-                    edge_colors.append([255, 255, 255, 255])  # White color for edges
+                    edge_colors.append([100, 100, 100, 255])  # Gray color for edges
 
         if edge_strips:
             rr.log("world/edges", rr.LineStrips3D(

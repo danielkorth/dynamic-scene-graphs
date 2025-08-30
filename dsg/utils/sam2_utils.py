@@ -666,30 +666,30 @@ def detect_with_automask(full_mask, **kwargs):
     #     plt.tight_layout()
     #     plt.show()
 
-    old_point_grid = mask_generator.point_grids[0]
-    mask_generator.point_grids = [new_points]
-    masks = mask_generator.generate(kwargs['image'])
-    mask_generator.point_grids = [old_point_grid]
-
-    # plt imshow the image + masks
-    # if kwargs['viz']:
-    #     fig, ax = plt.subplots()
-    #     ax.imshow(kwargs['image'])
-    #     for i, mask in enumerate(masks):
-    #         show_mask(mask['segmentation'], ax, obj_id=i, random_color=False)
-    #     ax.axis('off')
-    #     ax.set_title(f"Masks overlaid on frame {0}")
-    #     plt.tight_layout()
-    #     plt.show()
-    
-        # Create the return list of dicts
     return_list = []
-    for i in range(len(masks)):
-        return_list.append({
-            'points': None,
-            'labels': None,
-            'mask': masks[i]['segmentation']
-            })
+    if len(new_points) != 0:
+        old_point_grid = mask_generator.point_grids[0]
+        mask_generator.point_grids = [new_points]
+        masks = mask_generator.generate(kwargs['image'])
+        mask_generator.point_grids = [old_point_grid]
+
+        # plt imshow the image + masks
+        # if kwargs['viz']:
+        #     fig, ax = plt.subplots()
+        #     ax.imshow(kwargs['image'])
+        #     for i, mask in enumerate(masks):
+        #         show_mask(mask['segmentation'], ax, obj_id=i, random_color=False)
+        #     ax.axis('off')
+        #     ax.set_title(f"Masks overlaid on frame {0}")
+        #     plt.tight_layout()
+        #     plt.show()
+        
+        for i in range(len(masks)):
+            return_list.append({
+                'points': None,
+                'labels': None,
+                'mask': masks[i]['segmentation']
+                })
     return return_list
 
 # Save results using OpenCV for speed

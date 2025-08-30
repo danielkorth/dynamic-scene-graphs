@@ -1,5 +1,5 @@
 # package: global
-_target_: src.segment.SAM2Segmenter
+_target_: dsg.segment.SAM2Segmenter
 sam2_checkpoint: "${paths.checkpoints_dir}/sam2.1_hiera_small.pt"
 model_cfg: "/${paths.root_dir}/sam2/sam2/configs/sam2.1/sam2.1_hiera_s.yaml"
 

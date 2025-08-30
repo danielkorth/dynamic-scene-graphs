@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import rerun as rr
 from dsg.utils.data_loading import load_poses, get_camera_matrix
@@ -55,8 +56,23 @@ def main(cfg: DictConfig):
     # K = get_camera_matrix(intrinsics)
     # dist = get_distortion_coeffs(intrinsics)
 
-    from utils.data_loading import load_rgb_image, load_depth_image, load_obj_points
-    import os
+    from dsg.utils.data_loading import load_everything, load_rgb_image, load_depth_image, load_obj_points
+    # Determine depth directory based on depth_source configuration
+    depth_dir = None
+    if hasattr(cfg, 'depth_source') and cfg.depth_source == 'moge':
+        depth_dir = cfg.moge_depth_dir
+    elif hasattr(cfg, 'depth_source') and cfg.depth_source == 'moge_aligned':
+        depth_dir = cfg.moge_aligned_depth_dir
+    elif hasattr(cfg, 'depth_source') and cfg.depth_source == 'sensor':
+        depth_dir = None  # Use default path in images directory
+    else:
+        depth_dir = None  # Default behavior
+    
+    data = load_everything(cfg.images_folder, cfg.obj_points_dir, max_frames=cfg.max_frames, subsample=cfg.subsample, depth_dir=depth_dir)
+
+    rgb_images = data["rgb"]
+    depth_images = data["depth"]
+    obj_points = data["obj_points"]
 
     # Only load poses efficiently (they're already memory-efficient)
     tvecs, rvecs = load_poses(Path(cfg.source_folder) / "poses.txt", max_frames=cfg.max_frames, subsample=cfg.subsample)
@@ -139,10 +155,10 @@ def main(cfg: DictConfig):
         rr.set_time(timeline="world", sequence=i)
 
     # Save Open3D textured pointclouds for each node
-    save_textured_pointclouds(graph, cfg.source_folder)
+    save_textured_pointclouds(graph, cfg.source_folder, cfg.depth_source)
 
 
-def save_textured_pointclouds(graph, source_folder):
+def save_textured_pointclouds(graph, source_folder, depth_source):
     """
     Save textured point clouds for all nodes in the scene graph as PLY files.
 
@@ -153,7 +169,7 @@ def save_textured_pointclouds(graph, source_folder):
     print("Saving textured pointclouds for all nodes...")
 
     # Create output directory
-    output_dir = Path(source_folder) / "final_reconstructions"
+    output_dir = Path(source_folder) / f"final_reconstructions_{depth_source}"
     output_dir.mkdir(exist_ok=True)
 
     # Save pointcloud for each node
