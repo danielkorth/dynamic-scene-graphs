@@ -67,3 +67,17 @@ graph_update_every: 15      # Update scene graph every N frames
 # Advanced visualization features
 use_tsdf: false        # Use TSDF volume representation instead of point clouds
 text: "football"        # Text query for CLIP feature similarity highlighting
+
+# =============================================================================
+# 3D Reconstruction Settings (Used by: viz_obj_reconstruction.py)
+# =============================================================================
+reconstructions_folder: ${source_folder}/final_reconstructions_sensor  # Path to final_reconstructions folder
+max_points_per_cloud: 10000    # Maximum points per cloud for performance
+viz_meshes: true               # Show reconstructed meshes instead of point clouds
+alpha_shape_alpha: 0.02        # Alpha value for alpha shape reconstruction
+window_width: 1200             # Visualization window width
+window_height: 800             # Visualization window height
+point_show_normal: false       # Show point normals
+mesh_show_wireframe: false     # Show mesh wireframe
+mesh_show_back_face: true      # Show back faces of meshes
+selected_objects: []           # List of specific object indices to visualize (empty = all objects)

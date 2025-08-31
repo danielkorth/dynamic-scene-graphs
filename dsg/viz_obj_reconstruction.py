@@ -6,10 +6,11 @@ Script to visualize the saved Open3D textured pointclouds from the final_reconst
 import open3d as o3d
 import numpy as np
 from pathlib import Path
-import argparse
 import os
+import hydra
+from omegaconf import DictConfig
 
-def reconstruct_mesh_from_pointcloud(pcd: o3d.geometry.PointCloud, poisson_depth: int = 9) -> o3d.geometry.TriangleMesh:
+def reconstruct_mesh_from_pointcloud(pcd: o3d.geometry.PointCloud, alpha_shape_alpha: float = 0.02) -> o3d.geometry.TriangleMesh:
     """
     Reconstruct a triangle mesh from a point cloud using Poisson surface reconstruction.
 
@@ -19,6 +20,7 @@ def reconstruct_mesh_from_pointcloud(pcd: o3d.geometry.PointCloud, poisson_depth
     Args:
         pcd: Open3D point cloud
         poisson_depth: Octree depth for Poisson (higher = more detail, slower)
+        alpha_shape_alpha: Alpha value for alpha shape reconstruction
 
     Returns:
         Cleaned Open3D triangle mesh
@@ -37,17 +39,7 @@ def reconstruct_mesh_from_pointcloud(pcd: o3d.geometry.PointCloud, poisson_depth
             # Fallback orientation if consistent orientation fails
             pcd.orient_normals_to_align_with_direction(np.array([0.0, 0.0, 1.0]))
 
-    # mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-    #     pcd, depth=poisson_depth
-    # )
-    # Remove low-density vertices (trim floating artifacts)
-    # densities = np.asarray(densities)
-    # if densities.size == len(mesh.vertices) and densities.size > 0:
-    #     density_threshold = np.quantile(densities, 0.01)
-    #     to_remove_mask = densities < density_threshold
-    #     mesh.remove_vertices_by_mask(to_remove_mask)
-
-    mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha=0.02)
+    mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha=alpha_shape_alpha)
 
     # # Clean mesh
     mesh.remove_duplicated_vertices()
@@ -57,25 +49,24 @@ def reconstruct_mesh_from_pointcloud(pcd: o3d.geometry.PointCloud, poisson_depth
     # mesh.compute_vertex_normals()
     return mesh
 
-def visualize_reconstructions(reconstructions_folder: str, max_points_per_cloud: int = 10000, viz_meshes: bool = True):
+def visualize_reconstructions(cfg: DictConfig):
     """
     Visualize all saved pointclouds from the final_reconstructions folder.
     
     Args:
-        reconstructions_folder: Path to the final_reconstructions folder
-        max_points_per_cloud: Maximum number of points to display per cloud (for performance)
+        cfg: Hydra configuration object
     """
-    reconstructions_path = Path(reconstructions_folder)
+    reconstructions_path = Path(cfg.reconstructions_folder)
     
     if not reconstructions_path.exists():
-        print(f"Error: Reconstructions folder '{reconstructions_folder}' does not exist!")
+        print(f"Error: Reconstructions folder '{cfg.reconstructions_folder}' does not exist!")
         return
     
     # Find all PLY files
     ply_files = list(reconstructions_path.glob("*.ply"))
     
     if not ply_files:
-        print(f"No PLY files found in '{reconstructions_folder}'")
+        print(f"No PLY files found in '{cfg.reconstructions_folder}'")
         return
     
     print(f"Found {len(ply_files)} pointcloud files:")
@@ -85,11 +76,16 @@ def visualize_reconstructions(reconstructions_folder: str, max_points_per_cloud:
     # Load and prepare pointclouds
     geometries = []
     
-    # selected_files = [ply_files[9]] # 9-umbrella
-    # selected_files = [ply_files[0]] # 0-lamp
-    # selected_files = [ply_files[19]]# 19-notebook
-
-    selected_files = [ply_files[28], ply_files[13]]
+    # Use selected objects from config if specified, otherwise use all files
+    if hasattr(cfg, 'selected_objects') and cfg.selected_objects:
+        selected_files = [ply_files[i] for i in cfg.selected_objects if i < len(ply_files)]
+        if not selected_files:
+            print(f"Warning: No valid object indices in selected_objects: {cfg.selected_objects}")
+            selected_files = ply_files
+    else:
+        # Default selection for demonstration (can be overridden in config)
+        selected_files = ply_files
+    
     for i, ply_file in enumerate(selected_files):
         print(f"Loading {ply_file.name}...")
         
@@ -102,12 +98,12 @@ def visualize_reconstructions(reconstructions_folder: str, max_points_per_cloud:
                 continue
             
             # Downsample if too many points
-            if len(pcd.points) > max_points_per_cloud:
-                print(f"  Downsampling from {len(pcd.points)} to {max_points_per_cloud} points...")
+            if len(pcd.points) > cfg.max_points_per_cloud:
+                print(f"  Downsampling from {len(pcd.points)} to {cfg.max_points_per_cloud} points...")
                 pcd = pcd.voxel_down_sample(voxel_size=0.01)
                 # If still too many points, use uniform downsampling
-                if len(pcd.points) > max_points_per_cloud:
-                    indices = np.random.choice(len(pcd.points), max_points_per_cloud, replace=False)
+                if len(pcd.points) > cfg.max_points_per_cloud:
+                    indices = np.random.choice(len(pcd.points), cfg.max_points_per_cloud, replace=False)
                     pcd = pcd.select_by_index(indices)
             
             # Generate unique color for each object if no colors exist
@@ -119,9 +115,12 @@ def visualize_reconstructions(reconstructions_folder: str, max_points_per_cloud:
                 print(f"  Applied generated color: {rgb}")
 
             # Reconstruct mesh from point cloud and visualize that instead
-            if viz_meshes:
+            if cfg.viz_meshes:
                 try:
-                    mesh = reconstruct_mesh_from_pointcloud(pcd)
+                    mesh = reconstruct_mesh_from_pointcloud(
+                        pcd, 
+                        alpha_shape_alpha=getattr(cfg, 'alpha_shape_alpha', 0.02)
+                    )
                     if (rgb is not None) and (not mesh.has_vertex_colors()):
                         mesh.paint_uniform_color(rgb)
                     geometries.append(mesh)
@@ -159,11 +158,11 @@ def visualize_reconstructions(reconstructions_folder: str, max_points_per_cloud:
     o3d.visualization.draw_geometries(
         geometries,
         window_name="Scene Graph Reconstructions",
-        width=1200,
-        height=800,
-        point_show_normal=False,
-        mesh_show_wireframe=False,
-        mesh_show_back_face=True
+        width=getattr(cfg, 'window_width', 1200),
+        height=getattr(cfg, 'window_height', 800),
+        point_show_normal=getattr(cfg, 'point_show_normal', False),
+        mesh_show_wireframe=getattr(cfg, 'mesh_show_wireframe', False),
+        mesh_show_back_face=getattr(cfg, 'mesh_show_back_face', True)
     )
 
 def hsv_to_rgb(h, s, v):
@@ -188,28 +187,17 @@ def hsv_to_rgb(h, s, v):
     else:
         return [v, p, q]
 
-def main():
-    parser = argparse.ArgumentParser(description="Visualize Open3D reconstructions")
-    parser.add_argument(
-        "reconstructions_folder", 
-        help="Path to the final_reconstructions folder"
-    )
-    parser.add_argument(
-        "--max-points", 
-        type=int, 
-        default=10000,
-        help="Maximum points per cloud for performance (default: 10000)"
-    )
-    
-    args = parser.parse_args()
+@hydra.main(config_path="../configs", config_name="video_tracking")
+def main(cfg: DictConfig):
+    print(f"Configuration: {cfg}")
     
     # Check if folder exists
-    if not os.path.exists(args.reconstructions_folder):
-        print(f"Error: Folder '{args.reconstructions_folder}' does not exist!")
+    if not os.path.exists(cfg.reconstructions_folder):
+        print(f"Error: Folder '{cfg.reconstructions_folder}' does not exist!")
         print("Please run the main script first to generate reconstructions.")
         return
     
-    visualize_reconstructions(args.reconstructions_folder, args.max_points)
+    visualize_reconstructions(cfg)
 
 if __name__ == "__main__":
     main() 
