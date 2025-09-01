@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+        content="Revisiting Structure from Motion with 3D Reconstruction Priors">
+  <meta name="keywords" content="Dynamic Scene Graphs, RGB-D, Scene Graphs">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dynamic 3D Scene Graphs from RGB-D</title>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+        rel="stylesheet">
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+  <link rel="icon" href="./static/images/favicon.svg">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <script src="./static/js/bulma-carousel.min.js"></script>
+  <script src="./static/js/bulma-slider.min.js"></script>
+  <script src="./static/js/index.js"></script>
+</head>
+<body>
+
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-1 publication-title">Dynamic 3D Scene Graphs from RGB-D</h1>
+          <div class="is-size-5 publication-authors">
+            <span class="author-block">
+              <a href="https://danielkorth.io">Daniel Korth</a><sup>1,2,*</sup>,</span>
+            <span class="author-block">
+              <a href="https://x.com/XaviXva">Xavier Anadon</a><sup>1,3,*</sup>,</span>
+            <span class="author-block">
+              <a href="https://people.inf.ethz.ch/marc.pollefeys/">Marc Pollefeys</a><sup>1,4</sup>,</span>
+              <a href="https://zuriabauer.com">Zuria Bauer</a><sup>1</sup>,</span>
+            <span class="author-block">
+              <a href="https://cvg.ethz.ch/team/Dr-Daniel-Bela-Barath">Daniel Barath</a><sup>1,5</sup></span>
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><sup>1</sup>ETH Zurich<br> <sup>2</sup>Technical University of Munich<br> <sup>3</sup>University of Zaragoza<br> <sup>4</sup>Microsoft <br> <sup>5</sup>HUN-REN SZTAKI <br><br>   <sup>*</sup>Equal contribution</span>
+          </div>
+
+          <div class="column has-text-centered">
+            <div class="publication-links">
+              <!-- PDF Link. -->
+              <!-- Code Link. -->
+              <span class="link-block">
+                <a href="https://github.com/danielkorth/dynamic-scene-graphs"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fab fa-github"></i>
+                  </span>
+                  <span>Code</span>
+                  </a>
+              </span>
+              <!-- Slides Link. -->
+              <!-- <span class="link-block">
+                <a href="static/pdfs/report.pdf"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                  </span>
+                  <span>Slides</span>
+                </a>
+              </span> -->
+              <!-- Video Link. -->
+              <span class="link-block">
+                <a href="https://youtu.be/tMiMO2Wnj8Q"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fas fa-video"></i>
+                  </span>
+                  <span>Video</span>
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+      <video id="teaser" autoplay muted loop playsinline height="100%">
+        <source src="./static/videos/teaser.mp4"
+                type="video/mp4">
+      </video>
+      </br>
+      </br>
+      <h1 class="subtitle has-text-centered">
+        <b>tl;dr</b> RGB-D recording + camera poses -> SAM2 Video Tracking -> Lift Mask + Features to 3D -> Scene Graph.
+      </h1>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- Abstract. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            To interact in 3D environments, robots require a flexible and lightweight representation of the scene. 3D Scene Graphs store object information (location, features, reconstruction, etc.) in nodes and relationships as edges (distance, semantic, etc.). Here we present a method to build a scene graph from RGB-D input by lifting SAM video tracking masks to 3D. We use the Scene Graph to perform object reconstruction and semantic search, and focus on dynamic scenes with the ability to handle occlusions.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section class="section">
+  <div class="container is-max-desktop">
+
+    <div class="columns is-centered">
+      <div class="column">
+        <h2 class="title">Method</h2>
+        <img src="./static/images/method.png" alt="Method" height="80%" width="80%" style="display: block; margin: 20px auto;">
+        <div class="content has-text-justified">
+          <p>
+            <!-- We record an RGB-D sequence using a Zed Mini and extract camera poses. The initial frame is segmented with SAM to obtain object masks, which are tracked across frames using SAM’s latent mask encoding. Every n frames, tracking is restarted by transferring the latest masks to a new SAM tracking state and using SAM’s automatic segmentation to detect new regions. For each new mask, we extract SALAD features and compare them to previous crops using cosine similarity for object re-identification. Masks, camera poses, and depth allow us to unproject masks into 3D, forming nodes in a scene graph. Each node stores a centroid, SALAD/CLIP features, crops, and a node-centric point cloud. CLIP features are used for text-based queries. For object reconstruction, we align unprojected partial masks across frames using ICP, enabling continuous object updates. Our method supports dynamic scenes and handles occlusions through specialized re-identification. -->
+            We begin by recording an RGB-D video sequence using a Zed Mini camera, capturing both color and depth information and extract camera poses. The initial frame is segmented with SAM2 (Segment Anything Model), which encodes object masks into a latent space for efficient video tracking. These masks are tracked across subsequent frames using SAM’s latent mask encoding. 
+            To maintain robust tracking and integrate unmasked parts of the video into the graph, we restart the tracking process every n frames by transferring the latest masks to a new SAM tracking state. SAM’s automatic segmentation is then used to sample points and identify new regions in the frame that have not yet been segmented. For each newly detected mask, we extract SALAD feature descriptors and compare them to previously stored crops using cosine similarity. If the similarity score is high and the object is currently not visible, we re-identify it as an object previously seen.
+            Masks, camera poses, and depth data are used to unproject the 2D masks into 3D space, constructing nodes in a scene graph. Each node contains a centroid, extracted SALAD and CLIP features, the corresponding object crops, and a node-centric point cloud . CLIP features are used to enable text-based queries after the scene graph is constructed, allowing semantic search over objects.
+            For object reconstruction, we apply Iterative Closest Point (ICP) alignment to unprojected partial masks from different frames, gradually refining and updating each object’s 3D representation. This approach supports dynamic scenes and resolves occlusions using the specialized re-identification module based on multi-resolution feature matching.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section class="section" id="BibTeX">
+  <div class="container is-max-desktop content">
+    <h2 class="title">BibTeX</h2>
+    <pre><code>@article{korth_anadon2025dynamic,
+  author    = {Korth, Daniel and Anadon, Xavier and Pollefeys, Marc and Bauer, Zuria and Barath, Daniel},
+  title     = {Dynamic 3D Scene Graphs from RGB-D},
+  year      = {2025},
+}</code></pre>
+  </div>
+</section>
+
+
+<footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content" style="text-align: center;">
+          <p>
+            Website inspired by <a href="https://keunhong.com/">Keunhong Park</a>'s <a href="https://nerfies.github.io/">Nerfies website</a>.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

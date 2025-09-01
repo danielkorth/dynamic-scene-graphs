@@ -1,0 +1,9 @@
+defaults:
+  - paths: default
+  - _self_
+
+recording: ???
+input_dir: ${paths.data_dir}zed/${recording}/images
+config_file: ${paths.data_dir}/SN10896626.conf # SN10896626.conf SN35693142.conf
+camera: "left"
+resolution: "HD"

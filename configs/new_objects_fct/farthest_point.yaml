@@ -1,0 +1,4 @@
+_target_: dsg.utils.sam2_utils.detect_with_furthest
+_partial_: true
+buffer_radius: 10
+n_samples: 10

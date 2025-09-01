@@ -1,0 +1,83 @@
+# =============================================================================
+# VIDEO TRACKING CONFIGURATION
+# =============================================================================
+defaults:
+  - paths: default
+  - sam: tiny
+  - new_objects_fct: automask
+  - _self_
+
+# =============================================================================
+# DATASET CONFIGURATION
+# =============================================================================
+# Dataset identifier - used in path interpolation
+recording: umbrella2
+
+# =============================================================================
+# CORE PATHS (Used by: video_tracking.py + all visualization scripts)
+# =============================================================================
+source_folder: ${paths.data_dir}zed/${recording}                    # Dataset root directory
+images_folder: ${paths.data_dir}zed/${recording}/images_undistorted_crop  # Input RGB images
+intrinsics_file: ${images_folder}/intrinsics.txt               # Camera intrinsics file
+
+# =============================================================================
+# VIDEO PROCESSING PATHS (Used by: video_tracking.py only)
+# =============================================================================
+masks_output_folder: ${paths.data_dir}/zed/${recording}/masks_${stride}_${max_frames}      # Segmentation masks output
+mask_images_output_folder: ${paths.data_dir}/zed/${recording}/mask_images_${stride}_${max_frames}  # Mask visualization output
+output_folder: ${paths.output_dir}                               # General output directory
+obj_points_dir: ${source_folder}/obj_points_history             # Object tracking history
+
+# =============================================================================
+# DEPTH SOURCE CONFIGURATION (Used by: video_tracking.py only)
+# =============================================================================
+depth_source: sensor  # Options: "sensor" (default ZED depth), "moge" (MoGe-2 predicted depth), or "moge_aligned" (MoGe-2 aligned with sensor)
+moge_depth_dir: ${paths.data_dir}zed/${recording}/moge_depths  # Path to MoGe-2 depth maps
+moge_aligned_depth_dir: ${paths.data_dir}zed/${recording}/moge_aligned_depths  # Path to aligned MoGe-2 depth maps
+
+# =============================================================================
+# VIDEO PROCESSING PARAMETERS (Used by: video_tracking.py only)
+# =============================================================================
+# Frame subsampling and chunking
+subsample: 10        # Subsample factor on original frames (1 = no subsampling)
+chunk_size: 10       # Number of images per processing chunk
+overlap: 1           # Overlap between consecutive chunks
+
+# Segmentation settings
+prompt_with_masks: true  # Use masks as prompts for SAM2
+viz: false             # Visualize first frame segmentation
+use_obj_points: true   # Enable object point tracking
+
+# Advanced feature extraction (video_tracking.py specific)
+multi_res_crop: false  # Enable multi-resolution crop feature extraction
+acc_features: false    # Enable temporal feature accumulation across subsets
+reid_threshold: 0.9    # Re-identification threshold for new objects
+
+# =============================================================================
+# VISUALIZATION PARAMETERS (Used by: visualization scripts)
+# =============================================================================
+# Core visualization settings (used by most viz scripts)
+max_frames: 0         # Max frames to process (0 = no limit)
+headless: false       # Run without GUI (connect to external rerun server)
+
+# Scene graph and point cloud settings
+accumulate_points: true     # Accumulate 3D points across frames
+graph_update_every: 15      # Update scene graph every N frames
+
+# Advanced visualization features
+use_tsdf: false        # Use TSDF volume representation instead of point clouds
+text: "football"        # Text query for CLIP feature similarity highlighting
+
+# =============================================================================
+# 3D Reconstruction Settings (Used by: viz_obj_reconstruction.py)
+# =============================================================================
+reconstructions_folder: ${source_folder}/final_reconstructions_sensor  # Path to final_reconstructions folder
+max_points_per_cloud: 10000    # Maximum points per cloud for performance
+viz_meshes: true               # Show reconstructed meshes instead of point clouds
+alpha_shape_alpha: 0.02        # Alpha value for alpha shape reconstruction
+window_width: 1200             # Visualization window width
+window_height: 800             # Visualization window height
+point_show_normal: false       # Show point normals
+mesh_show_wireframe: false     # Show mesh wireframe
+mesh_show_back_face: true      # Show back faces of meshes
+selected_objects: []           # List of specific object indices to visualize (empty = all objects)

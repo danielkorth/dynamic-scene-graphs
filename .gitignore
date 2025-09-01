@@ -1,0 +1,20 @@
+.venv/
+.mypy_cache/
+data
+.vscode
+*/__pycache__/
+__pycache__/
+*.egg-info/
+checkpoints/*
+*.pt
+*.pth
+# util script
+sync_zed_data.sh
+
+# uv 
+uv.lock
+.python-version
+outputs/*
+sam2/notebooks/*
+multirun/*
+.cursor/*
