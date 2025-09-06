@@ -113,7 +113,7 @@
         <h2 class="title is-3">Abstract</h2>
         <div class="content has-text-justified">
           <p>
-            To interact in 3D environments, robots require a flexible and lightweight representation of the scene. 3D Scene Graphs store object information (location, features, reconstruction, etc.) in nodes and relationships as edges (distance, semantic, etc.). Here we present a method to build a scene graph from RGB-D input by lifting SAM video tracking masks to 3D. We use the Scene Graph to perform object reconstruction and semantic search, and focus on dynamic scenes with the ability to handle occlusions.
+            To interact in 3D environments, robots need a flexible and lightweight representation of the scene. 3D Scene Graphs represent objects (location, features, reconstruction, etc.) as nodes, and relationships (distance, semantics, etc.) as edges. Existing methods rely on pre-scanned environments, making them unsuitable for previously unseen scenes. We present a method to build scene graphs incrementally from an RGB-D data stream. By extending SAM video tracking, we track all objects in the scene, including those that newly appear or disappear in the scene. These 2D tracks are lifted into 3D using depth to construct the graph, where we store per-object learned features extracted from state-of-the-art deep learning models. We demonstrate the flexibility of our approach through object reconstruction and semantic search in dynamic scenes with occlusions and distractors.
           </p>
         </div>
       </div>
